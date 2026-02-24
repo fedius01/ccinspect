@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(docker compose *)",
+      "Read(src/**)",
+      "Read(tests/**)",
+      "Read(prisma/**)",
+      "Write(src/**)",
+      "Write(tests/**)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.production)",
+      "Write(.env*)",
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "LOG_LEVEL": "debug"
+  },
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedHosts": ["localhost", "127.0.0.1", "registry.npmjs.org"]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "type": "command",
+        "command": "./scripts/pre-bash-hook.sh"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(node *)",
+      "Bash(curl *)",
+      "Read(**)",
+      "Write(**)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "DEBUG": "true"
+  }
+}

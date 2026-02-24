@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)"
+    ]
+  },
+  "env": {
+    "DATABASE_URL": "postgresql://localhost:5433/acme_dev",
+    "LOG_LEVEL": "trace"
+  }
+}
