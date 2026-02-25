@@ -23,6 +23,7 @@ function makeInventory(overrides: Partial<ConfigInventory> = {}): ConfigInventor
     userAgents: [],
     projectCommands: [],
     userCommands: [],
+    projectSkills: [],
     projectMcp: null,
     managedMcp: null,
     plugins: [],

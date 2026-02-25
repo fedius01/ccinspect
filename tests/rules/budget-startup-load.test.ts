@@ -23,6 +23,7 @@ function makeInventory(totalStartupTokens: number): ConfigInventory {
     userAgents: [],
     projectCommands: [],
     userCommands: [],
+    projectSkills: [],
     projectMcp: null,
     managedMcp: null,
     plugins: [],

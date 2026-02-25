@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)"
+    ],
+    "deny": [
+      "Bash(npm run *)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "API_URL": "https://api.production.example.com"
+  }
+}

@@ -1,0 +1,6 @@
+# .ccinspectignore
+# Paths to exclude from ccinspect scan/lint results.
+# Uses glob patterns (same syntax as .gitignore).
+
+# Test fixtures contain intentionally bad configs — don't lint them
+tests/fixtures/**

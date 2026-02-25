@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(docker compose *)",
+      "Read(src/**)",
+      "Read(tests/**)",
+      "Write(src/**)",
+      "Write(tests/**)",
+      "InvalidTool(foo)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "LOG_LEVEL": "debug",
+    "FEATURE_FLAGS": "true"
+  },
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedHosts": ["localhost", "127.0.0.1", "registry.npmjs.org"]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/lint-check.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "plugins": {
+    "enabledPlugins": {
+      "code-review@marketplace": true,
+      "auto-format@marketplace": false
+    }
+  },
+  "model": "claude-sonnet-4-20250514"
+}

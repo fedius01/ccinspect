@@ -13,8 +13,10 @@ export const tokenBudgetRule: LintRule = {
   severity: 'warning',
   category: 'memory',
 
-  check(inventory: ConfigInventory, _resolved: ResolvedConfig): LintIssue[] {
+  check(inventory: ConfigInventory, _resolved: ResolvedConfig, options?: Record<string, unknown>): LintIssue[] {
     const issues: LintIssue[] = [];
+    const warnThreshold = (options?.warn as number) ?? DEFAULT_WARN;
+    const errorThreshold = (options?.error as number) ?? DEFAULT_ERROR;
 
     const claudeMdFiles = existingFiles([
       inventory.globalClaudeMd,
@@ -24,22 +26,22 @@ export const tokenBudgetRule: LintRule = {
     ]);
 
     for (const file of claudeMdFiles) {
-      if (file.estimatedTokens > DEFAULT_ERROR) {
+      if (file.estimatedTokens > errorThreshold) {
         issues.push({
           ruleId: 'memory/token-budget',
           severity: 'error',
           category: 'memory',
-          message: `${file.relativePath} uses ~${file.estimatedTokens} tokens (limit: ${DEFAULT_ERROR}). This consumes significant context on every prompt.`,
+          message: `${file.relativePath} uses ~${file.estimatedTokens} tokens (limit: ${errorThreshold}). This consumes significant context on every prompt.`,
           file: file.path,
-          suggestion: `Optimize to <${DEFAULT_WARN} tokens. Remove generic instructions, use concise phrasing, move verbose docs elsewhere.`,
+          suggestion: `Optimize to <${warnThreshold} tokens. Remove generic instructions, use concise phrasing, move verbose docs elsewhere.`,
           autoFixable: false,
         });
-      } else if (file.estimatedTokens > DEFAULT_WARN) {
+      } else if (file.estimatedTokens > warnThreshold) {
         issues.push({
           ruleId: 'memory/token-budget',
           severity: 'warning',
           category: 'memory',
-          message: `${file.relativePath} uses ~${file.estimatedTokens} tokens (recommended: <${DEFAULT_WARN}).`,
+          message: `${file.relativePath} uses ~${file.estimatedTokens} tokens (recommended: <${warnThreshold}).`,
           file: file.path,
           suggestion: `Consider optimizing for fewer tokens. Each token in CLAUDE.md is consumed on every single prompt.`,
           autoFixable: false,

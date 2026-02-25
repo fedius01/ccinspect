@@ -3,6 +3,7 @@ import { join, relative, resolve, basename } from 'path';
 import fg from 'fast-glob';
 
 import type { FileInfo, RuleFileInfo, ConfigInventory, FileScope, HookInfo } from '../types/index.js';
+import type { Excluder } from '../utils/excluder.js';
 import { findGitRoot, isGitTracked, getProjectIdentifier } from '../utils/git.js';
 import { estimateTokens } from '../utils/tokens.js';
 import {
@@ -94,6 +95,18 @@ function discoverMdFiles(dirPath: string): string[] {
   }
 }
 
+function discoverSkillFiles(skillsDir: string): string[] {
+  if (!pathExists(skillsDir)) return [];
+  try {
+    return readdirSync(skillsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((dir) => join(skillsDir, dir.name, 'SKILL.md'))
+      .filter((skillPath) => pathExists(skillPath));
+  } catch {
+    return [];
+  }
+}
+
 function discoverSubdirClaudeMds(projectRoot: string): string[] {
   try {
     return fg.sync('**/CLAUDE.md', {
@@ -109,6 +122,7 @@ function discoverSubdirClaudeMds(projectRoot: string): string[] {
 export interface ScanOptions {
   projectDir?: string;
   includeNonExistent?: boolean;
+  excluder?: Excluder;
 }
 
 export function scan(options: ScanOptions = {}): ConfigInventory {
@@ -117,6 +131,10 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   const gitRoot = findGitRoot(projectRoot);
 
   const includeNonExistent = options.includeNonExistent ?? true;
+  const excluder = options.excluder;
+
+  // Helper to filter out excluded paths
+  const notExcluded = (p: string): boolean => !excluder || !excluder.isExcluded(p);
 
   // Helper that returns FileInfo only if it exists or includeNonExistent is true
   function getFileInfo(path: string, scope: FileScope): FileInfo | null {
@@ -138,7 +156,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   const projectClaudeMd = getFileInfo(join(projectRoot, 'CLAUDE.md'), 'project-shared');
   const localClaudeMd = getFileInfo(join(projectRoot, 'CLAUDE.local.md'), 'project-local');
 
-  const subdirPaths = discoverSubdirClaudeMds(projectRoot);
+  const subdirPaths = discoverSubdirClaudeMds(projectRoot).filter(notExcluded);
   const subdirClaudeMds = subdirPaths
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
@@ -164,14 +182,14 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
 
   // Rules
   const rulesDir = join(projectRoot, '.claude', 'rules');
-  const ruleFiles = discoverMdFiles(rulesDir);
+  const ruleFiles = discoverMdFiles(rulesDir).filter(notExcluded);
   const rules = ruleFiles
     .map((p) => buildRuleFileInfo(p, projectRoot))
     .filter((f): f is RuleFileInfo => f !== null);
 
   // Agents
   const projectAgentsDir = join(projectRoot, '.claude', 'agents');
-  const projectAgentFiles = discoverMdFiles(projectAgentsDir);
+  const projectAgentFiles = discoverMdFiles(projectAgentsDir).filter(notExcluded);
   const projectAgents = projectAgentFiles
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
@@ -184,7 +202,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
 
   // Commands
   const projectCommandsDir = join(projectRoot, '.claude', 'commands');
-  const projectCommandFiles = discoverMdFiles(projectCommandsDir);
+  const projectCommandFiles = discoverMdFiles(projectCommandsDir).filter(notExcluded);
   const projectCommands = projectCommandFiles
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
@@ -193,6 +211,13 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   const userCommandFiles = discoverMdFiles(userCommandsDir);
   const userCommands = userCommandFiles
     .map((p) => buildFileInfo(p, 'user', projectRoot))
+    .filter((f): f is FileInfo => f !== null);
+
+  // Skills
+  const projectSkillsDir = join(projectRoot, '.claude', 'skills');
+  const projectSkillFiles = discoverSkillFiles(projectSkillsDir).filter(notExcluded);
+  const projectSkills = projectSkillFiles
+    .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
 
   // MCP
@@ -219,6 +244,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     ...userAgents,
     ...projectCommands,
     ...userCommands,
+    ...projectSkills,
   ];
 
   const existingFiles = allFiles.filter((f): f is FileInfo => f !== null && f.exists);
@@ -266,6 +292,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     userAgents,
     projectCommands,
     userCommands,
+    projectSkills,
     projectMcp,
     managedMcp,
     plugins: [],

@@ -14,6 +14,7 @@ export interface ParsedSettings {
     enabled?: boolean;
     autoAllowBashIfSandboxed?: boolean;
     excludedCommands?: string[];
+    network?: Record<string, unknown>;
   };
   plugins: {
     enabledPlugins?: Record<string, boolean>;
@@ -66,6 +67,7 @@ export function parseSettingsJson(filePath: string, source: string): ParsedSetti
       enabled: sandboxRaw?.enabled as boolean | undefined,
       autoAllowBashIfSandboxed: sandboxRaw?.autoAllowBashIfSandboxed as boolean | undefined,
       excludedCommands: sandboxRaw?.excludedCommands as string[] | undefined,
+      network: sandboxRaw?.network as Record<string, unknown> | undefined,
     };
 
     // Plugins

@@ -1,4 +1,5 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { dirname, resolve, isAbsolute } from 'path';
 import { estimateTokens } from '../utils/tokens.js';
 
 export interface ClaudeMdSection {
@@ -13,6 +14,17 @@ export interface ImportRef {
   line: number;
 }
 
+export interface GenericInstruction {
+  text: string;
+  line: number;
+}
+
+export interface ImportChainEntry {
+  path: string;
+  depth: number;
+  resolvedPath: string | null;
+}
+
 export interface ParsedClaudeMd {
   filePath: string;
   content: string;
@@ -24,6 +36,9 @@ export interface ParsedClaudeMd {
   hasCommands: boolean;
   hasArchitecture: boolean;
   hasTechStack: boolean;
+  genericInstructions: GenericInstruction[];
+  importChain: ImportChainEntry[];
+  maxImportDepth: number;
 }
 
 const SECTION_KEYWORDS: Record<string, string[]> = {
@@ -33,9 +48,95 @@ const SECTION_KEYWORDS: Record<string, string[]> = {
   techStack: ['tech stack', 'technology', 'stack', 'dependencies', 'tooling'],
 };
 
+const GENERIC_PHRASES: string[] = [
+  'follow best practices',
+  'write clean code',
+  'be consistent',
+  'use meaningful names',
+  'use meaningful variable names',
+  'keep it simple',
+  'follow standards',
+  'follow the standards',
+  'use proper error handling',
+  'write readable code',
+  'follow the style guide',
+  'ensure code quality',
+  'follow industry best practices',
+  'write self-documenting code',
+  'use appropriate design patterns',
+  'keep the codebase maintainable',
+  'follow the coding standards',
+  'keep functions small and focused',
+  'follow the dry principle',
+  'follow solid principles',
+  'make sure code is well-documented',
+  'ensure code quality is high',
+  'handle edge cases appropriately',
+];
+
 function matchesSectionKeywords(heading: string, keywords: string[]): boolean {
   const lower = heading.toLowerCase();
   return keywords.some((kw) => lower.includes(kw));
+}
+
+function detectGenericInstructions(lines: string[]): GenericInstruction[] {
+  const results: GenericInstruction[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const lower = lines[i].toLowerCase();
+    for (const phrase of GENERIC_PHRASES) {
+      if (lower.includes(phrase)) {
+        results.push({
+          text: lines[i].trim().replace(/^[-*]\s*/, ''),
+          line: i + 1,
+        });
+        break; // one match per line is enough
+      }
+    }
+  }
+  return results;
+}
+
+function resolveImportChain(
+  filePath: string,
+  maxDepth: number,
+  visited: Set<string>,
+  currentDepth: number,
+): ImportChainEntry[] {
+  if (currentDepth > maxDepth || visited.has(filePath)) {
+    return [];
+  }
+  visited.add(filePath);
+
+  const entries: ImportChainEntry[] = [];
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const dir = dirname(filePath);
+
+    for (const line of lines) {
+      const importMatch = line.match(/@([\w./\-]+\.md)/);
+      if (importMatch) {
+        const importPath = importMatch[1];
+        const resolved = isAbsolute(importPath) ? importPath : resolve(dir, importPath);
+        const resolvedPath = existsSync(resolved) ? resolved : null;
+
+        entries.push({
+          path: importPath,
+          depth: currentDepth,
+          resolvedPath,
+        });
+
+        if (resolvedPath && !visited.has(resolvedPath)) {
+          const childEntries = resolveImportChain(resolvedPath, maxDepth, visited, currentDepth + 1);
+          entries.push(...childEntries);
+        }
+      }
+    }
+  } catch {
+    // file read error — stop recursion for this branch
+  }
+
+  return entries;
 }
 
 export function parseClaudeMd(filePath: string): ParsedClaudeMd | null {
@@ -90,6 +191,16 @@ export function parseClaudeMd(filePath: string): ParsedClaudeMd | null {
       matchesSectionKeywords(h, SECTION_KEYWORDS.techStack),
     );
 
+    // Detect generic instructions
+    const genericInstructions = detectGenericInstructions(lines);
+
+    // Resolve import chain
+    const visited = new Set<string>();
+    const importChain = resolveImportChain(filePath, 5, visited, 1);
+    const maxImportDepth = importChain.length > 0
+      ? Math.max(...importChain.map((e) => e.depth))
+      : 0;
+
     return {
       filePath,
       content,
@@ -101,6 +212,9 @@ export function parseClaudeMd(filePath: string): ParsedClaudeMd | null {
       hasCommands,
       hasArchitecture,
       hasTechStack,
+      genericInstructions,
+      importChain,
+      maxImportDepth,
     };
   } catch {
     return null;

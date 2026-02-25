@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "settings/sandbox-recommended": false,
+    "memory/line-count": { "warn": 100, "error": 250 },
+    "memory/token-budget": { "warn": 1500, "error": 4000 },
+    "budget/startup-load": { "warn": 4000, "error": 8000 }
+  }
+}

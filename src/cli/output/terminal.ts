@@ -1,6 +1,7 @@
 import chalk from 'chalk';
-import type { FileInfo, ConfigInventory, LintIssue, LintResult } from '../../types/index.js';
+import type { FileInfo, ConfigInventory, LintResult, ResolvedConfig } from '../../types/index.js';
 import type { RuntimeInfo } from '../../types/runtime.js';
+import type { ProjectComparison } from '../commands/compare.js';
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '-';
@@ -120,6 +121,14 @@ export function printInventory(inventory: ConfigInventory): void {
     }
   }
 
+  // Skills
+  if (inventory.projectSkills.length > 0) {
+    console.log(chalk.bold.underline('\nSkills'));
+    for (const skill of inventory.projectSkills) {
+      printFileRow(skill.relativePath, skill);
+    }
+  }
+
   // MCP
   console.log(chalk.bold.underline('\nMCP'));
   printFileRow('.mcp.json', inventory.projectMcp);
@@ -228,4 +237,248 @@ export function printLintResult(result: LintResult): void {
     `${parts.join(', ')} | ${result.stats.rulesRun} rules checked | ${result.stats.filesChecked} files scanned | ${result.stats.duration}ms`,
   );
   console.log();
+}
+
+// ------- Resolve Output -------
+
+interface ResolveSections {
+  permissions: boolean;
+  env: boolean;
+  mcp: boolean;
+  model: boolean;
+  sandbox: boolean;
+}
+
+export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveSections): void {
+  console.log();
+  console.log(chalk.bold('ccinspect resolve'));
+  console.log();
+
+  if (sections.permissions) {
+    console.log(chalk.bold.underline('Permissions'));
+
+    if (resolved.permissions.effectiveAllow.length > 0) {
+      console.log(chalk.green('  Allow:'));
+      for (const rule of resolved.permissions.effectiveAllow) {
+        console.log(`    ${chalk.green('+')} ${rule.pattern}  ${chalk.gray(`← ${rule.origin}`)}`);
+      }
+    }
+
+    if (resolved.permissions.effectiveDeny.length > 0) {
+      console.log(chalk.red('  Deny:'));
+      for (const rule of resolved.permissions.effectiveDeny) {
+        console.log(`    ${chalk.red('-')} ${rule.pattern}  ${chalk.gray(`← ${rule.origin}`)}`);
+      }
+    }
+
+    if (resolved.permissions.conflicts.length > 0) {
+      console.log(chalk.red('  Conflicts:'));
+      for (const conflict of resolved.permissions.conflicts) {
+        console.log(`    ${chalk.red('!')} ${conflict.pattern}: ${conflict.explanation}`);
+      }
+    }
+
+    if (resolved.permissions.redundancies.length > 0) {
+      console.log(chalk.yellow('  Redundancies:'));
+      for (const r of resolved.permissions.redundancies) {
+        console.log(`    ${chalk.yellow('~')} ${r.explanation}`);
+      }
+    }
+
+    if (resolved.permissions.effectiveAllow.length === 0 && resolved.permissions.effectiveDeny.length === 0) {
+      console.log(chalk.gray('  No permission rules configured'));
+    }
+    console.log();
+  }
+
+  if (sections.env) {
+    console.log(chalk.bold.underline('Environment Variables'));
+    if (resolved.environment.effective.size > 0) {
+      for (const [name, envVar] of resolved.environment.effective) {
+        const shadowTag = envVar.shadowedValues ? chalk.yellow(' (shadowed)') : '';
+        console.log(`  ${name}=${envVar.value}  ${chalk.gray(`← ${envVar.origin}`)}${shadowTag}`);
+        if (envVar.shadowedValues) {
+          for (const sv of envVar.shadowedValues) {
+            console.log(chalk.gray(`    overrides: ${sv.value} from ${sv.origin}`));
+          }
+        }
+      }
+    } else {
+      console.log(chalk.gray('  No environment variables configured'));
+    }
+    console.log();
+  }
+
+  if (sections.mcp) {
+    console.log(chalk.bold.underline('MCP Servers'));
+    if (resolved.mcpServers.effective.length > 0) {
+      for (const server of resolved.mcpServers.effective) {
+        const status = server.enabled ? chalk.green('enabled') : chalk.red('disabled');
+        console.log(`  ${server.name}: ${status}  ${chalk.gray(`← ${server.origin}`)}`);
+        if (server.conflicts && server.conflicts.length > 0) {
+          for (const c of server.conflicts) {
+            const cStatus = c.enabled ? 'enabled' : 'disabled';
+            console.log(chalk.yellow(`    conflict: ${cStatus} at ${c.origin}`));
+          }
+        }
+      }
+    } else {
+      console.log(chalk.gray('  No MCP servers configured'));
+    }
+    console.log();
+  }
+
+  if (sections.model) {
+    console.log(chalk.bold.underline('Model'));
+    console.log(`  Default: ${resolved.model.effectiveModel.value}  ${chalk.gray(`← ${resolved.model.effectiveModel.origin}`)}`);
+    if (resolved.model.subagentModel) {
+      console.log(`  Subagent: ${resolved.model.subagentModel.value}  ${chalk.gray(`← ${resolved.model.subagentModel.origin}`)}`);
+    }
+    if (resolved.model.haikuModel) {
+      console.log(`  Haiku: ${resolved.model.haikuModel.value}  ${chalk.gray(`← ${resolved.model.haikuModel.origin}`)}`);
+    }
+    if (resolved.model.opusModel) {
+      console.log(`  Opus: ${resolved.model.opusModel.value}  ${chalk.gray(`← ${resolved.model.opusModel.origin}`)}`);
+    }
+    console.log();
+  }
+
+  if (sections.sandbox) {
+    console.log(chalk.bold.underline('Sandbox'));
+    const sandboxStatus = resolved.sandbox.enabled.value ? chalk.green('enabled') : chalk.yellow('disabled');
+    console.log(`  Sandbox: ${sandboxStatus}  ${chalk.gray(`← ${resolved.sandbox.enabled.origin}`)}`);
+    if (resolved.sandbox.autoAllowBashIfSandboxed) {
+      console.log(`  Auto-allow Bash: ${resolved.sandbox.autoAllowBashIfSandboxed.value}  ${chalk.gray(`← ${resolved.sandbox.autoAllowBashIfSandboxed.origin}`)}`);
+    }
+    if (resolved.sandbox.excludedCommands) {
+      console.log(`  Excluded commands: ${resolved.sandbox.excludedCommands.value.join(', ')}  ${chalk.gray(`← ${resolved.sandbox.excludedCommands.origin}`)}`);
+    }
+    if (Object.keys(resolved.sandbox.networkConfig).length > 0) {
+      console.log(`  Network config: ${JSON.stringify(resolved.sandbox.networkConfig)}`);
+    }
+    console.log();
+  }
+}
+
+// ------- Resolve JSON Output -------
+
+function resolvedConfigToJson(resolved: ResolvedConfig, sections: ResolveSections): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+
+  if (sections.permissions) {
+    output.permissions = {
+      allow: resolved.permissions.effectiveAllow,
+      deny: resolved.permissions.effectiveDeny,
+      ask: resolved.permissions.effectiveAsk,
+      conflicts: resolved.permissions.conflicts,
+      redundancies: resolved.permissions.redundancies,
+    };
+  }
+
+  if (sections.env) {
+    const envObj: Record<string, unknown> = {};
+    for (const [name, envVar] of resolved.environment.effective) {
+      envObj[name] = envVar;
+    }
+    output.environment = {
+      effective: envObj,
+      shadows: resolved.environment.shadows,
+    };
+  }
+
+  if (sections.mcp) {
+    output.mcpServers = resolved.mcpServers;
+  }
+
+  if (sections.model) {
+    output.model = resolved.model;
+  }
+
+  if (sections.sandbox) {
+    output.sandbox = resolved.sandbox;
+  }
+
+  return output;
+}
+
+export function printResolvedConfigJson(resolved: ResolvedConfig, sections: ResolveSections): void {
+  console.log(JSON.stringify(resolvedConfigToJson(resolved, sections), null, 2));
+}
+
+// ------- Compare Output -------
+
+export function printComparison(results: ProjectComparison[]): void {
+  console.log();
+  console.log(chalk.bold('ccinspect compare'));
+  console.log();
+
+  // Summary table
+  const colWidth = 30;
+  const header = '  ' + 'Metric'.padEnd(20) + results.map((r) => r.dir.padEnd(colWidth)).join('');
+  console.log(chalk.bold(header));
+  console.log(chalk.gray('  ' + '-'.repeat(20 + results.length * colWidth)));
+
+  // Total files
+  console.log(
+    '  ' + 'Total files'.padEnd(20) + results.map((r) => String(r.totalFiles).padEnd(colWidth)).join(''),
+  );
+
+  // Startup tokens
+  console.log(
+    '  ' + 'Startup tokens'.padEnd(20) + results.map((r) => formatTokens(r.totalStartupTokens).padEnd(colWidth)).join(''),
+  );
+
+  // Permission counts
+  console.log(
+    '  ' + 'Allow rules'.padEnd(20) + results.map((r) => String(r.resolved.permissions.effectiveAllow.length).padEnd(colWidth)).join(''),
+  );
+  console.log(
+    '  ' + 'Deny rules'.padEnd(20) + results.map((r) => String(r.resolved.permissions.effectiveDeny.length).padEnd(colWidth)).join(''),
+  );
+
+  // MCP servers
+  console.log(
+    '  ' + 'MCP servers'.padEnd(20) + results.map((r) => String(r.resolved.mcpServers.effective.length).padEnd(colWidth)).join(''),
+  );
+
+  // Env vars
+  console.log(
+    '  ' + 'Env variables'.padEnd(20) + results.map((r) => String(r.resolved.environment.effective.size).padEnd(colWidth)).join(''),
+  );
+
+  // Model
+  console.log(
+    '  ' + 'Model'.padEnd(20) + results.map((r) => r.resolved.model.effectiveModel.value.padEnd(colWidth)).join(''),
+  );
+
+  // Sandbox
+  console.log(
+    '  ' + 'Sandbox'.padEnd(20) + results.map((r) => (r.resolved.sandbox.enabled.value ? 'enabled' : 'disabled').padEnd(colWidth)).join(''),
+  );
+
+  // Conflicts
+  const conflictCounts = results.map(
+    (r) => r.resolved.permissions.conflicts.length + r.resolved.mcpServers.conflicts.length,
+  );
+  console.log(
+    '  ' + 'Conflicts'.padEnd(20) + conflictCounts.map((c) => (c > 0 ? chalk.red(String(c)) : chalk.green('0')).padEnd(colWidth)).join(''),
+  );
+
+  console.log();
+}
+
+export function printComparisonJson(results: ProjectComparison[]): void {
+  const output = results.map((r) => ({
+    dir: r.dir,
+    totalFiles: r.totalFiles,
+    totalStartupTokens: r.totalStartupTokens,
+    resolved: resolvedConfigToJson(r.resolved, {
+      permissions: true,
+      env: true,
+      mcp: true,
+      model: true,
+      sandbox: true,
+    }),
+  }));
+  console.log(JSON.stringify(output, null, 2));
 }

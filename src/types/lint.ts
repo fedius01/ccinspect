@@ -30,7 +30,7 @@ export interface LintRule {
   description: string;
   severity: Severity;
   category: IssueCategory;
-  check(inventory: ConfigInventory, resolved: ResolvedConfig): LintIssue[];
+  check(inventory: ConfigInventory, resolved: ResolvedConfig, options?: Record<string, unknown>): LintIssue[];
   fix?(inventory: ConfigInventory, issue: LintIssue): void;
 }
 

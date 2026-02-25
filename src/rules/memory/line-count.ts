@@ -13,8 +13,10 @@ export const lineCountRule: LintRule = {
   severity: 'warning',
   category: 'memory',
 
-  check(inventory: ConfigInventory, _resolved: ResolvedConfig): LintIssue[] {
+  check(inventory: ConfigInventory, _resolved: ResolvedConfig, options?: Record<string, unknown>): LintIssue[] {
     const issues: LintIssue[] = [];
+    const warnThreshold = (options?.warn as number) ?? DEFAULT_WARN;
+    const errorThreshold = (options?.error as number) ?? DEFAULT_ERROR;
 
     const claudeMdFiles = existingFiles([
       inventory.globalClaudeMd,
@@ -24,22 +26,22 @@ export const lineCountRule: LintRule = {
     ]);
 
     for (const file of claudeMdFiles) {
-      if (file.lineCount > DEFAULT_ERROR) {
+      if (file.lineCount > errorThreshold) {
         issues.push({
           ruleId: 'memory/line-count',
           severity: 'error',
           category: 'memory',
-          message: `${file.relativePath} has ${file.lineCount} lines (limit: ${DEFAULT_ERROR}). Instruction-following degrades significantly beyond this.`,
+          message: `${file.relativePath} has ${file.lineCount} lines (limit: ${errorThreshold}). Instruction-following degrades significantly beyond this.`,
           file: file.path,
-          suggestion: `Reduce to <${DEFAULT_WARN} lines. Move detailed docs to separate files and use @imports.`,
+          suggestion: `Reduce to <${warnThreshold} lines. Move detailed docs to separate files and use @imports.`,
           autoFixable: false,
         });
-      } else if (file.lineCount > DEFAULT_WARN) {
+      } else if (file.lineCount > warnThreshold) {
         issues.push({
           ruleId: 'memory/line-count',
           severity: 'warning',
           category: 'memory',
-          message: `${file.relativePath} has ${file.lineCount} lines (recommended: <${DEFAULT_WARN}).`,
+          message: `${file.relativePath} has ${file.lineCount} lines (recommended: <${warnThreshold}).`,
           file: file.path,
           suggestion: `Consider moving verbose sections to docs/ and referencing via @imports.`,
           autoFixable: false,

@@ -1,5 +1,7 @@
 import type { Command } from 'commander';
+import { resolve as resolvePath } from 'path';
 import { scan } from '../../core/scanner.js';
+import { createExcluder } from '../../utils/excluder.js';
 import { printInventory } from '../output/terminal.js';
 import { printInventoryJson } from '../output/json.js';
 
@@ -12,7 +14,12 @@ export function registerScanCommand(program: Command): void {
       const projectDir = globalOpts.projectDir as string | undefined;
       const format = globalOpts.format as string | undefined;
 
-      const inventory = scan({ projectDir });
+      const resolvedProjectDir = resolvePath(projectDir || process.cwd());
+      const excluder = createExcluder(resolvedProjectDir, {
+        cliPatterns: globalOpts.exclude ?? [],
+      });
+
+      const inventory = scan({ projectDir, excluder });
 
       if (format === 'json') {
         printInventoryJson(inventory);

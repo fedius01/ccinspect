@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl *)"
+    ],
+    "deny": [
+      "Bash(docker compose *)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "DATABASE_URL": "postgresql://localhost:5433/platform_dev"
+  },
+  "plugins": {
+    "enabledPlugins": {
+      "auto-format@marketplace": true
+    }
+  }
+}

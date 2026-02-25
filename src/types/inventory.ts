@@ -56,12 +56,13 @@ export interface ConfigInventory {
   autoMemory: FileInfo | null;
   autoMemoryTopics: FileInfo[];
 
-  // Rules & agents & commands
+  // Rules & agents & commands & skills
   rules: RuleFileInfo[];
   projectAgents: FileInfo[];
   userAgents: FileInfo[];
   projectCommands: FileInfo[];
   userCommands: FileInfo[];
+  projectSkills: FileInfo[];
 
   // MCP
   projectMcp: FileInfo | null;

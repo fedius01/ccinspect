@@ -44,6 +44,11 @@ describe('Scanner', () => {
       const inventory = scan({ projectDir });
       expect(inventory.projectAgents).toHaveLength(0);
     });
+
+    it('has no project skills in minimal project', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectSkills).toHaveLength(0);
+    });
   });
 
   describe('full-project', () => {
@@ -77,6 +82,13 @@ describe('Scanner', () => {
     it('discovers commands', () => {
       const inventory = scan({ projectDir });
       expect(inventory.projectCommands.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('discovers skills', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectSkills.length).toBeGreaterThanOrEqual(1);
+      const skillPaths = inventory.projectSkills.map((s) => s.relativePath);
+      expect(skillPaths.some((p) => p.includes('SKILL.md'))).toBe(true);
     });
 
     it('discovers MCP config', () => {
@@ -121,6 +133,7 @@ describe('Scanner', () => {
       expect(inventory.localSettings?.exists).toBe(false);
       expect(inventory.rules).toHaveLength(0);
       expect(inventory.projectAgents).toHaveLength(0);
+      expect(inventory.projectSkills).toHaveLength(0);
     });
   });
 });

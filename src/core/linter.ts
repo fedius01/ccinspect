@@ -1,4 +1,4 @@
-import type { ConfigInventory, ResolvedConfig, LintRule, LintIssue, LintResult, LintConfig } from '../types/index.js';
+import type { ConfigInventory, ResolvedConfig, LintRule, LintIssue, LintResult, LintConfig, Severity } from '../types/index.js';
 
 export class Linter {
   private rules: LintRule[] = [];
@@ -24,14 +24,27 @@ export class Linter {
 
     for (const rule of this.rules) {
       // Check if rule is disabled in config
+      let ruleOptions: Record<string, unknown> | undefined;
       if (config?.rules) {
         const ruleConfig = config.rules[rule.id];
         if (ruleConfig === false) continue;
+        if (typeof ruleConfig === 'object' && ruleConfig !== null) {
+          ruleOptions = ruleConfig;
+        }
       }
 
       rulesRun++;
       try {
-        const ruleIssues = rule.check(inventory, resolved);
+        const ruleIssues = rule.check(inventory, resolved, ruleOptions);
+
+        // Apply severity override from config if specified
+        const severityOverride = ruleOptions?.severity as Severity | undefined;
+        if (severityOverride) {
+          for (const issue of ruleIssues) {
+            issue.severity = severityOverride;
+          }
+        }
+
         issues.push(...ruleIssues);
       } catch (err) {
         issues.push({
@@ -67,6 +80,7 @@ export class Linter {
       ...inventory.userAgents,
       ...inventory.projectCommands,
       ...inventory.userCommands,
+      ...inventory.projectSkills,
     ];
     const filesChecked = allFiles.filter((f) => f !== null && f.exists).length;
 
