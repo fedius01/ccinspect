@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Bash(npm run *)",
+      "Bash(npm run test)",
+      "Read",
+      "Read(src/index.ts)",
+      "mcp__*",
+      "mcp__github__*",
+      "mcp__server__tool"
+    ],
+    "deny": [
+      "Write(src/**)",
+      "Write(src/index.ts)"
+    ]
+  }
+}

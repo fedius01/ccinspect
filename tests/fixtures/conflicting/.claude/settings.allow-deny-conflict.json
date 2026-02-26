@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Read(src/**)",
+      "mcp__server__*"
+    ],
+    "deny": [
+      "Bash(npm run *)",
+      "mcp__server__*"
+    ]
+  }
+}

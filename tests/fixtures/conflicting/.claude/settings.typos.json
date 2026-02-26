@@ -1,0 +1,12 @@
+{
+  "sandBox": true,
+  "permission": {
+    "allow": ["Read"]
+  },
+  "mcpservers": {},
+  "allowedTool": [],
+  "hook": {},
+  "env": {
+    "NODE_ENV": "test"
+  }
+}

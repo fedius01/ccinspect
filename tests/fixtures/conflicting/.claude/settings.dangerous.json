@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Write",
+      "Edit",
+      "mcp__*",
+      "Task",
+      "Read"
+    ],
+    "deny": [
+      "Bash(rm -rf /)"
+    ]
+  }
+}

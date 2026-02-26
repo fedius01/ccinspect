@@ -12,7 +12,8 @@ export type IssueCategory =
   | 'cross-level'
   | 'budget'
   | 'mcp'
-  | 'hooks';
+  | 'hooks'
+  | 'git';
 
 export interface LintIssue {
   ruleId: string;

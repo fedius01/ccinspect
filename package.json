@@ -4,31 +4,59 @@
   "description": "Claude Code Configuration Inspector — analyze, lint, and resolve Claude Code configs",
   "type": "module",
   "bin": {
-    "ccinspect": "./dist/cli/index.js"
+    "ccinspect": "./dist/cli/index.js",
+    "cci": "./dist/cli/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx src/cli/index.ts",
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/ tests/ && tsc --noEmit",
-    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'"
+    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
+    "prepublishOnly": "npm run build && npm run test",
+    "check-package": "npm pack --dry-run"
   },
   "engines": {
     "node": ">=20"
   },
-  "keywords": ["claude", "claude-code", "configuration", "linter", "inspector"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "configuration",
+    "linter",
+    "inspector"
+  ],
+  "author": "ccinspect contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOURUSER/ccinspect.git"
+  },
+  "homepage": "https://github.com/YOURUSER/ccinspect",
+  "bugs": {
+    "url": "https://github.com/YOURUSER/ccinspect/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
     "ora": "^8.2.0",
+    "picomatch": "^4.0.0",
     "tiktoken": "^1.0.21"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",
+    "@types/picomatch": "^4.0.2",
     "eslint": "^9.20.0",
     "prettier": "^3.5.0",
     "tsup": "^8.4.0",

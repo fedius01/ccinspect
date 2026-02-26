@@ -2,7 +2,10 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+*.tgz
 .DS_Store
 .env
 .env.*
+.claude/settings.local.json
+CLAUDE.local.md
 docs

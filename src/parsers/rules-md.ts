@@ -20,11 +20,11 @@ export function parseRuleMd(filePath: string, projectRoot: string): ParsedRule |
     const hasFrontmatter = Object.keys(frontmatter).length > 0;
     const content = parsed.content;
 
-    // Evaluate path globs if present
+    // Evaluate path globs if present (Claude Code supports both "globs" and "paths")
     let matchedFiles: string[] = [];
-    const paths = frontmatter.paths;
-    if (Array.isArray(paths) && paths.length > 0) {
-      const patterns = paths.filter((p): p is string => typeof p === 'string');
+    const globsOrPaths = frontmatter.globs ?? frontmatter.paths;
+    if (Array.isArray(globsOrPaths) && globsOrPaths.length > 0) {
+      const patterns = globsOrPaths.filter((p): p is string => typeof p === 'string');
       if (patterns.length > 0) {
         matchedFiles = fg.sync(patterns, {
           cwd: projectRoot,
@@ -35,7 +35,7 @@ export function parseRuleMd(filePath: string, projectRoot: string): ParsedRule |
       }
     }
 
-    const isDead = hasFrontmatter && Array.isArray(paths) && paths.length > 0 && matchedFiles.length === 0;
+    const isDead = hasFrontmatter && Array.isArray(globsOrPaths) && globsOrPaths.length > 0 && matchedFiles.length === 0;
 
     return {
       filePath,
