@@ -8,4 +8,4 @@ coverage/
 .env.*
 .claude/settings.local.json
 CLAUDE.local.md
-docs
+/docs
