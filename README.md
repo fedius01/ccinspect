@@ -15,6 +15,7 @@ It works entirely offline — no API keys needed. Just point it at a project and
 
 ## Quick start
 
+## Quick start
 ```bash
 # Run without installing
 npx ccinspect scan
@@ -22,19 +23,21 @@ npx ccinspect lint
 
 # Or install globally
 npm install -g ccinspect
-ccinspect scan
-ccinspect lint
+cci scan
+cci lint
 ```
+
+> **Tip:** `cci` and `ccinspect` are interchangeable — use whichever you prefer.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `ccinspect scan` | Discover and inventory all config files with sizes, token counts, and git status |
-| `ccinspect lint` | Run 35 rules across 10 categories to find issues |
-| `ccinspect resolve` | Show effective config after all layers merge, with origin tracking |
-| `ccinspect compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
-| `ccinspect info` | Show runtime info — CLI version, active model, auth method |
+| `cci scan` | Discover and inventory all config files with sizes, token counts, and git status |
+| `cci lint` | Run 35 rules across 10 categories to find issues |
+| `cci resolve` | Show effective config after all layers merge, with origin tracking |
+| `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
+| `cci info` | Show runtime info — CLI version, active model, auth method |
 
 ## Common flags
 
@@ -74,12 +77,12 @@ vendor/
 Or use the `--exclude` CLI flag:
 
 ```bash
-ccinspect lint --exclude "vendor/**"
+cci lint --exclude "vendor/**"
 ```
 
 ### Advanced config
 
-ccinspect supports `.ccinspect.json` for rule enable/disable, severity overrides, and threshold tuning. See [docs/configuration.md](docs/configuration.md) for the full schema.
+ccinspect supports `.ccinspect.json` for rule enable/disable, severity overrides, and threshold tuning. See [documentation/configuration.md](documentation/configuration.md) for the full schema.
 
 ## What it scans
 
@@ -115,7 +118,7 @@ src/
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
 tests/        Vitest test suite (325 tests)
-docs/         Architecture, requirements, roadmap
+documentation/    Configuration    
 ```
 
 ## License
