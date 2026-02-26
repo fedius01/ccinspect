@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs';
-import type { HookInfo, PluginInfo } from '../types/index.js';
+import type { HookInfo } from '../types/index.js';
 
 export interface ParsedPermissions {
   allow: string[];

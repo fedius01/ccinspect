@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { localSettingsTrackedRule } from '../../src/rules/git/local-settings-tracked.js';
 import { resolve } from '../../src/core/resolver.js';
 import type { ConfigInventory } from '../../src/types/index.js';

@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { resolve as resolvePath } from 'path';
+import { existsSync, statSync } from 'fs';
 import { scan } from '../../core/scanner.js';
 import { createExcluder } from '../../utils/excluder.js';
 import { printInventory } from '../output/terminal.js';
@@ -15,6 +16,12 @@ export function registerScanCommand(program: Command): void {
       const format = globalOpts.format as string | undefined;
 
       const resolvedProjectDir = resolvePath(projectDir || process.cwd());
+
+      if (projectDir && (!existsSync(resolvedProjectDir) || !statSync(resolvedProjectDir).isDirectory())) {
+        console.error(`Error: directory not found: ${resolvedProjectDir}`);
+        process.exitCode = 1;
+        return;
+      }
       const excluder = createExcluder(resolvedProjectDir, {
         cliPatterns: globalOpts.exclude ?? [],
       });

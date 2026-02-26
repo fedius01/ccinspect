@@ -114,7 +114,7 @@ function resolveImportChain(
     const dir = dirname(filePath);
 
     for (const line of lines) {
-      const importMatch = line.match(/@([\w./\-]+\.md)/);
+      const importMatch = line.match(/@([\w./-]+\.md)/);
       if (importMatch) {
         const importPath = importMatch[1];
         const resolved = isAbsolute(importPath) ? importPath : resolve(dir, importPath);
@@ -171,7 +171,7 @@ export function parseClaudeMd(filePath: string): ParsedClaudeMd | null {
     // Extract @imports
     const imports: ImportRef[] = [];
     for (let i = 0; i < lines.length; i++) {
-      const importMatch = lines[i].match(/@([\w./\-]+\.md)/);
+      const importMatch = lines[i].match(/@([\w./-]+\.md)/);
       if (importMatch) {
         imports.push({
           path: importMatch[1],

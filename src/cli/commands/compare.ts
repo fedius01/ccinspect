@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { resolve as resolvePath } from 'path';
+import { existsSync, statSync } from 'fs';
 import { scan } from '../../core/scanner.js';
 import { resolve } from '../../core/resolver.js';
 import type { ParsedConfigLayers } from '../../core/resolver.js';
@@ -65,6 +66,15 @@ export function registerCompareCommand(program: Command): void {
         console.error('Error: compare requires at least 2 directories');
         process.exitCode = 1;
         return;
+      }
+
+      for (const dir of dirs) {
+        const resolved = resolvePath(dir);
+        if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+          console.error(`Error: directory not found: ${resolved}`);
+          process.exitCode = 1;
+          return;
+        }
       }
 
       const cliPatterns: string[] = globalOpts.exclude ?? [];

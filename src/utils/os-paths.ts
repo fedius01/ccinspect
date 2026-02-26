@@ -1,4 +1,4 @@
-import { platform } from 'os';
+import { platform, release } from 'os';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import type { OsType } from '../types/index.js';
@@ -10,8 +10,8 @@ export function detectOs(): OsType {
   // Check for WSL
   if (p === 'linux') {
     try {
-      const release = require('os').release().toLowerCase();
-      if (release.includes('microsoft') || release.includes('wsl')) {
+      const rel = release().toLowerCase();
+      if (rel.includes('microsoft') || rel.includes('wsl')) {
         return 'windows-wsl';
       }
     } catch {

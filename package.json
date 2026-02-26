@@ -36,11 +36,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOURUSER/ccinspect.git"
+    "url": "https://github.com/fedius01/ccinspect.git"
   },
-  "homepage": "https://github.com/YOURUSER/ccinspect",
+  "homepage": "https://github.com/fedius01/ccinspect",
   "bugs": {
-    "url": "https://github.com/YOURUSER/ccinspect/issues"
+    "url": "https://github.com/fedius01/ccinspect/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -50,18 +50,19 @@
     "commander": "^13.1.0",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
-    "ora": "^8.2.0",
     "picomatch": "^4.0.0",
     "tiktoken": "^1.0.21"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",
     "@types/picomatch": "^4.0.2",
+    "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^9.20.0",
     "prettier": "^3.5.0",
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
     "vitest": "^3.0.0"
   }
 }

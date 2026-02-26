@@ -42,7 +42,7 @@ export const staleImportsRule: LintRule = {
         for (let i = 0; i < lines.length; i++) {
           // Match @import or @ followed by a relative/absolute path to a .md file
           // The Claude Code import syntax: @filepath.md or @./path/to/file.md
-          const importMatch = lines[i].match(/@([\w./\-]+\.md)\b/);
+          const importMatch = lines[i].match(/@([\w./-]+\.md)\b/);
           if (!importMatch) continue;
 
           const importPath = importMatch[1];

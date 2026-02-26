@@ -97,7 +97,9 @@ export function toLintConfig(config: CcinspectConfig): LintConfig {
       rules[ruleId] = false;
     } else {
       // Pass the full options object (severity, thresholds, etc.)
-      const { enabled: _enabled, ...rest } = options;
+      const rest = Object.fromEntries(
+        Object.entries(options).filter(([key]) => key !== 'enabled'),
+      );
       if (Object.keys(rest).length > 0) {
         rules[ruleId] = rest;
       } else {

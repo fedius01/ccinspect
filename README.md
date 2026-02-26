@@ -27,7 +27,6 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 
 ## Quick start
 
-## Quick start
 ```bash
 # Run without installing
 npx ccinspect scan
@@ -104,7 +103,8 @@ ccinspect discovers and analyzes these Claude Code configuration surfaces:
 - **Memory** — `CLAUDE.md` at global, project, local, and subdirectory levels; `MEMORY.md` auto-memory
 - **Rules** — `.claude/rules/*.md` with YAML frontmatter and path globs
 - **Agents** — `.claude/agents/*.md` and `~/.claude/agents/*.md`
-- **Skills** — `.claude/commands/*.md` and `~/.claude/commands/*.md`
+- **Skills** — `.claude/skills/*/SKILL.md`
+- **Commands** — `.claude/commands/*.md` and `~/.claude/commands/*.md`
 - **MCP** — `.mcp.json` and managed MCP configs
 - **Hooks** — Hook definitions in settings files
 - **Plugins** — Plugin enable/disable across scopes
@@ -112,7 +112,7 @@ ccinspect discovers and analyzes these Claude Code configuration surfaces:
 ## Development
 
 ```bash
-git clone https://github.com/YOURUSER/ccinspect.git
+git clone https://github.com/fedius01/ccinspect.git
 cd ccinspect
 npm install
 npm run test
@@ -130,7 +130,7 @@ src/
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
 tests/        Vitest test suite (325 tests)
-documentation/    Configuration    
+documentation/         Configuration
 ```
 
 ## License

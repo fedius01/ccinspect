@@ -2,12 +2,11 @@ import { readFileSync, statSync, readdirSync } from 'fs';
 import { join, relative, resolve, basename } from 'path';
 import fg from 'fast-glob';
 
-import type { FileInfo, RuleFileInfo, ConfigInventory, FileScope, HookInfo } from '../types/index.js';
+import type { FileInfo, RuleFileInfo, ConfigInventory, FileScope } from '../types/index.js';
 import type { Excluder } from '../utils/excluder.js';
 import { findGitRoot, isGitTracked, getProjectIdentifier } from '../utils/git.js';
 import { estimateTokens } from '../utils/tokens.js';
 import {
-  getHomeDir,
   getUserSettingsPath,
   getUserClaudeMdPath,
   getPreferencesPath,
@@ -127,7 +126,6 @@ export interface ScanOptions {
 
 export function scan(options: ScanOptions = {}): ConfigInventory {
   const projectRoot = resolve(options.projectDir || process.cwd());
-  const home = getHomeDir();
   const gitRoot = findGitRoot(projectRoot);
 
   const includeNonExistent = options.includeNonExistent ?? true;
