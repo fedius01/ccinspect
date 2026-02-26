@@ -1,17 +1,29 @@
-# ccinspect
+<div align="center">
 
-**Claude Code Configuration Inspector** — scan, lint, and resolve Claude Code configs across all layers.
+# ⚙️ ccinspect
 
-![npm](https://img.shields.io/npm/v/ccinspect)
-![license](https://img.shields.io/npm/l/ccinspect)
+**Claude Code Configuration Inspector**
 
-## What it does
+Scan · Lint · Resolve · Compare
 
-Claude Code uses 30+ configuration files spread across 7+ locations — user settings, project settings, local overrides, enterprise policies, CLAUDE.md memory files, MCP servers, rules, agents, hooks, and more. When things conflict or drift, debugging is painful.
+[![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
+[![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
+[![tests](https://img.shields.io/badge/tests-325%20passing-brightgreen)]()
 
-**ccinspect** gives you a unified view. It discovers every config file, resolves the effective configuration after all layers merge, and runs 35 lint rules to catch security issues, conflicts, dead references, and best practice violations.
+</div>
 
-It works entirely offline — no API keys needed. Just point it at a project and get actionable results.
+---
+
+Claude Code uses **30+ config files** across **7+ locations** — and when they conflict, debugging is painful.
+
+**ccinspect** fixes that in one command:
+
+🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
+🧹 **Lint** — runs 35 rules catching security gaps, dead references, conflicts, and bloat  
+🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking  
+⚖️ **Compare** — diffs configurations across projects side-by-side  
+
+> Fully offline. No API keys. Just point it at a project.
 
 ## Quick start
 
