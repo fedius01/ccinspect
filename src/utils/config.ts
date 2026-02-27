@@ -9,8 +9,16 @@ export interface RuleOptions {
   [key: string]: unknown;
 }
 
+export interface SessionHandoverConfig {
+  testCommand?: string;
+  typecheckCommand?: string;
+  smellsCommand?: string;
+  statusFile?: string;
+}
+
 export interface CcinspectConfig {
   rules: Record<string, RuleOptions>;
+  sessionHandover?: SessionHandoverConfig;
 }
 
 function readJsonFile(filePath: string): Record<string, unknown> | null {
@@ -83,7 +91,14 @@ export function loadConfig(projectRoot: string): CcinspectConfig {
 
   const rules = deepMergeRules(userRules, projectRules);
 
-  return { rules };
+  // Merge sessionHandover config: project overrides user
+  const userHandover = (userRaw?.sessionHandover as SessionHandoverConfig | undefined) ?? undefined;
+  const projectHandover = (projectRaw?.sessionHandover as SessionHandoverConfig | undefined) ?? undefined;
+  const sessionHandover = userHandover || projectHandover
+    ? { ...userHandover, ...projectHandover }
+    : undefined;
+
+  return { rules, sessionHandover };
 }
 
 /**

@@ -118,7 +118,7 @@ function discoverSubdirClaudeMds(projectRoot: string): string[] {
   }
 }
 
-export interface ScanOptions {
+interface ScanOptions {
   projectDir?: string;
   includeNonExistent?: boolean;
   excluder?: Excluder;

@@ -7,6 +7,7 @@ import { registerInfoCommand } from './commands/info.js';
 import { registerLintCommand } from './commands/lint.js';
 import { registerResolveCommand } from './commands/resolve.js';
 import { registerCompareCommand } from './commands/compare.js';
+import { registerSessionHandoverCommand } from './commands/session-handover.js';
 
 declare const PKG_VERSION: string | undefined;
 
@@ -35,5 +36,6 @@ registerInfoCommand(program);
 registerLintCommand(program);
 registerResolveCommand(program);
 registerCompareCommand(program);
+registerSessionHandoverCommand(program);
 
 program.parse();

@@ -18,8 +18,8 @@ const TOOL_PATTERN_REGEX = /^(\w+)\((.+)\)$/;
 const BARE_IDENTIFIER_REGEX = /^[\w.]+$/;
 // MCP patterns: mcp__*, mcp__name, mcp__name__*, mcp__name__tool
 // Server/tool names may contain hyphens, alphanumerics, underscores
+// eslint-disable-next-line sonarjs/slow-regex -- input is from local config files, not untrusted
 const MCP_PATTERN_REGEX = /^mcp__(\*|[a-zA-Z0-9_-]+(__(\*|[a-zA-Z0-9_-]+))?)$/;
-
 function existingFiles(files: (FileInfo | null)[]): FileInfo[] {
   return files.filter((f): f is FileInfo => f !== null && f.exists);
 }

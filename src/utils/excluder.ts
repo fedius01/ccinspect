@@ -128,4 +128,4 @@ export {
   BUILTIN_EXCLUDE_PATTERNS,
   IGNORE_FILENAME,
   loadIgnoreFile,
-};
+};  // knip:ignore

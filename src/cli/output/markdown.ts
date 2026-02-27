@@ -14,8 +14,16 @@ export function printLintResultMarkdown(result: LintResult): string {
     lines.push('|----------|------|---------|------|------------|');
 
     for (const issue of result.issues) {
-      const severity = issue.severity === 'error' ? '**ERROR**' : issue.severity === 'warning' ? 'warning' : 'info';
-      const file = issue.file ? `\`${issue.file}${issue.line ? `:${issue.line}` : ''}\`` : '-';
+      let severity: string;
+      if (issue.severity === 'error') {
+        severity = '**ERROR**';
+      } else if (issue.severity === 'warning') {
+        severity = 'warning';
+      } else {
+        severity = 'info';
+      }
+      const lineRef = issue.line ? `:${issue.line}` : '';
+      const file = issue.file ? `\`${issue.file}${lineRef}\`` : '-';
       const message = issue.message.replace(/\|/g, '\\|');
       const suggestion = issue.suggestion.replace(/\|/g, '\\|');
       lines.push(`| ${severity} | \`${issue.ruleId}\` | ${message} | ${file} | ${suggestion} |`);

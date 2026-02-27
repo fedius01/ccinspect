@@ -53,7 +53,7 @@ export const denyEnvFilesRule: LintRule = {
         severity: 'warning',
         category: 'settings',
         message: `Missing deny rules for env files. Recommended patterns not found: ${missing.join(', ')}`,
-        suggestion: `Add to your project settings.json: { "permissions": { "deny": [${missing.map((p) => `"${p}"`).join(', ')}] } }`,
+        suggestion: `Add to your project settings.json: { "permissions": { "deny": [${missing.map((p) => '"' + p + '"').join(', ')}] } }`,
         autoFixable: true,
       });
     }

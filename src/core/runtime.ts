@@ -11,6 +11,7 @@ import {
 
 function getClaudeVersion(): { version: string; installPath: string } {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path
     const version = execSync('claude --version', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -18,6 +19,7 @@ function getClaudeVersion(): { version: string; installPath: string } {
 
     let installPath = 'unknown';
     try {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path
       installPath = execSync('which claude', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -34,6 +36,7 @@ function getClaudeVersion(): { version: string; installPath: string } {
 
 async function getLatestVersion(): Promise<string | null> {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path
     const result = execSync('npm view @anthropic-ai/claude-code version 2>/dev/null', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],

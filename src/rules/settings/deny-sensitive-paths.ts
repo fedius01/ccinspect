@@ -134,7 +134,7 @@ export const denySensitivePathsRule: LintRule = {
           severity: 'info',
           category: 'settings',
           message: `No deny rule protects ${group.name}. Consider adding: ${group.patterns.join(', ')}`,
-          suggestion: `Add to your settings.json deny list: ${group.patterns.map((p) => `"${p}"`).join(', ')}`,
+          suggestion: `Add to your settings.json deny list: ${group.patterns.map((p) => '"' + p + '"').join(', ')}`,
           autoFixable: false,
         });
       }

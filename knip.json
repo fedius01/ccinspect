@@ -1,0 +1,9 @@
+{
+  "project": ["src/**/*.ts"],
+  "ignore": [
+    "src/types/**",
+    "src/parsers/**",
+    "src/utils/excluder.ts",
+    "src/utils/config.ts"
+  ]
+}

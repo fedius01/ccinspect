@@ -21,6 +21,7 @@ const LOCAL_FILES: LocalFile[] = [
 
 function isGitTracked(filePath: string, gitRoot: string): boolean {
   try {
+    // eslint-disable-next-line sonarjs/os-command
     execSync(`git ls-files --error-unmatch "${filePath}"`, {
       cwd: gitRoot,
       stdio: 'pipe',

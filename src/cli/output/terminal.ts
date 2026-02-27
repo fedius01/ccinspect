@@ -341,7 +341,8 @@ export function printLintResult(result: LintResult): void {
   } else {
     // Collect raw data for alignment
     const issueRows = result.issues.map((issue) => {
-      const fileRef = issue.file ? `(${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
+      const lineRef = issue.line ? `:${issue.line}` : '';
+      const fileRef = issue.file ? `(${issue.file}${lineRef})` : '';
       const ruleId = `[${issue.ruleId}]`;
       return { issue, fileRef, ruleId };
     });
@@ -408,14 +409,16 @@ export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveS
       if (allowRows.length > 0) {
         console.log(chalk.green('  Allow:'));
         for (const row of allowRows) {
-          console.log(`    ${row.icon} ${row.pattern.padEnd(maxPattern)}  ${chalk.gray(`\u2190 ${row.origin}`)}`);
+          const originTag = chalk.gray(`\u2190 ${row.origin}`);
+          console.log(`    ${row.icon} ${row.pattern.padEnd(maxPattern)}  ${originTag}`);
         }
       }
 
       if (denyRows.length > 0) {
         console.log(chalk.red('  Deny:'));
         for (const row of denyRows) {
-          console.log(`    ${row.icon} ${row.pattern.padEnd(maxPattern)}  ${chalk.gray(`\u2190 ${row.origin}`)}`);
+          const originTag = chalk.gray(`\u2190 ${row.origin}`);
+          console.log(`    ${row.icon} ${row.pattern.padEnd(maxPattern)}  ${originTag}`);
         }
       }
     }
@@ -451,7 +454,8 @@ export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveS
       for (const [name, envVar] of envEntries) {
         const kv = `${name}=${envVar.value}`;
         const shadowTag = envVar.shadowedValues ? chalk.yellow(' (shadowed)') : '';
-        console.log(`  ${kv.padEnd(maxKV)}  ${chalk.gray(`\u2190 ${envVar.origin}`)}${shadowTag}`);
+        const originTag = chalk.gray(`\u2190 ${envVar.origin}`);
+        console.log(`  ${kv.padEnd(maxKV)}  ${originTag}${shadowTag}`);
         if (envVar.shadowedValues) {
           for (const sv of envVar.shadowedValues) {
             console.log(chalk.gray(`    overrides: ${sv.value} from ${sv.origin}`));
@@ -472,7 +476,8 @@ export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveS
 
       for (const server of resolved.mcpServers.effective) {
         const status = server.enabled ? chalk.green('enabled') : chalk.red('disabled');
-        console.log(`  ${server.name.padEnd(maxName)}  ${padEnd(status, maxStatus)}  ${chalk.gray(`\u2190 ${server.origin}`)}`);
+        const originTag = chalk.gray(`\u2190 ${server.origin}`);
+        console.log(`  ${server.name.padEnd(maxName)}  ${padEnd(status, maxStatus)}  ${originTag}`);
         if (server.conflicts && server.conflicts.length > 0) {
           for (const c of server.conflicts) {
             const cStatus = c.enabled ? 'enabled' : 'disabled';
@@ -504,7 +509,8 @@ export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveS
     const maxValue = Math.max(...modelRows.map((r) => r.value.length));
 
     for (const row of modelRows) {
-      console.log(`  ${row.label.padEnd(maxLabel)}  ${row.value.padEnd(maxValue)}  ${chalk.gray(`\u2190 ${row.origin}`)}`);
+      const originTag = chalk.gray(`\u2190 ${row.origin}`);
+      console.log(`  ${row.label.padEnd(maxLabel)}  ${row.value.padEnd(maxValue)}  ${originTag}`);
     }
     console.log();
   }
@@ -512,12 +518,15 @@ export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveS
   if (sections.sandbox) {
     console.log(chalk.bold.underline('Sandbox'));
     const sandboxStatus = resolved.sandbox.enabled.value ? chalk.green('enabled') : chalk.yellow('disabled');
-    console.log(`  Sandbox: ${sandboxStatus}  ${chalk.gray(`\u2190 ${resolved.sandbox.enabled.origin}`)}`);
+    const sandboxOriginTag = chalk.gray(`\u2190 ${resolved.sandbox.enabled.origin}`);
+    console.log(`  Sandbox: ${sandboxStatus}  ${sandboxOriginTag}`);
     if (resolved.sandbox.autoAllowBashIfSandboxed) {
-      console.log(`  Auto-allow Bash: ${resolved.sandbox.autoAllowBashIfSandboxed.value}  ${chalk.gray(`\u2190 ${resolved.sandbox.autoAllowBashIfSandboxed.origin}`)}`);
+      const bashOriginTag = chalk.gray(`\u2190 ${resolved.sandbox.autoAllowBashIfSandboxed.origin}`);
+      console.log(`  Auto-allow Bash: ${resolved.sandbox.autoAllowBashIfSandboxed.value}  ${bashOriginTag}`);
     }
     if (resolved.sandbox.excludedCommands) {
-      console.log(`  Excluded commands: ${resolved.sandbox.excludedCommands.value.join(', ')}  ${chalk.gray(`\u2190 ${resolved.sandbox.excludedCommands.origin}`)}`);
+      const cmdsOriginTag = chalk.gray(`\u2190 ${resolved.sandbox.excludedCommands.origin}`);
+      console.log(`  Excluded commands: ${resolved.sandbox.excludedCommands.value.join(', ')}  ${cmdsOriginTag}`);
     }
     if (Object.keys(resolved.sandbox.networkConfig).length > 0) {
       console.log(`  Network config: ${JSON.stringify(resolved.sandbox.networkConfig)}`);
