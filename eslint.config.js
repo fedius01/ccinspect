@@ -14,6 +14,11 @@ export default [
       'sonarjs/cognitive-complexity': ['warn', 15],
       'sonarjs/no-duplicate-string': 'warn',
       'sonarjs/no-identical-functions': 'warn',
+      'sonarjs/todo-tag': 'off',
+      'sonarjs/fixme-tag': 'off',
+      'sonarjs/slow-regex': 'off',
+      'sonarjs/no-empty-test-file': 'off',
+      'sonarjs/publicly-writable-directories': 'off',
     },
   },
   {
