@@ -159,9 +159,9 @@ function parseTestOutput(stdout: string, stderr: string): string {
   }
 
   // Generic patterns: "X passing", "X failed"
-  // eslint-disable-next-line sonarjs/slow-regex
+   
   const passingMatch = combined.match(/(\d+)\s+pass(?:ing|ed)/i);
-  // eslint-disable-next-line sonarjs/slow-regex
+   
   const failingMatch = combined.match(/(\d+)\s+fail(?:ing|ed)/i);
   if (passingMatch && failingMatch) {
     return `${passingMatch[1]} passing, ${failingMatch[1]} failing`;
@@ -192,16 +192,16 @@ function parseSmellsOutput(stdout: string, stderr: string): string {
   const combined = stdout + '\n' + stderr;
 
   // ESLint pattern: "N problems (M errors, K warnings)"
-  // eslint-disable-next-line sonarjs/slow-regex
+   
   const problemsMatch = combined.match(/(\d+)\s+problems?\s*\((\d+)\s+errors?,\s*(\d+)\s+warnings?\)/);
   if (problemsMatch) {
     return `${problemsMatch[2]} errors, ${problemsMatch[3]} warnings`;
   }
 
   // Simpler pattern: "X errors" or "X warnings"
-  // eslint-disable-next-line sonarjs/slow-regex
+   
   const errorMatch = combined.match(/(\d+)\s+errors?/i);
-  // eslint-disable-next-line sonarjs/slow-regex
+   
   const warningMatch = combined.match(/(\d+)\s+warnings?/i);
   if (errorMatch || warningMatch) {
     const errors = errorMatch ? errorMatch[1] : '0';
@@ -269,7 +269,7 @@ function buildSuggestedPrompt(result: HandoverResult): string {
   qualityParts.push('All quality gates passing.');
 
   if (result.smellsResult && result.smellsResult.summary.includes('warnings')) {
-    // eslint-disable-next-line sonarjs/slow-regex
+     
     const warningMatch = result.smellsResult.summary.match(/(\d+)\s+warnings?/);
     if (warningMatch && parseInt(warningMatch[1]) > 0) {
       qualityParts.push(`${warningMatch[1]} code smell warnings remain (tracked tech debt, see \`/smells\`).`);

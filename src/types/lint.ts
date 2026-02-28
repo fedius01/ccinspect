@@ -13,6 +13,7 @@ export type IssueCategory =
   | 'budget'
   | 'mcp'
   | 'hooks'
+  | 'plugins'
   | 'git';
 
 export interface LintIssue {

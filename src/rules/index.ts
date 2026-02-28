@@ -34,6 +34,13 @@ import { sectionTooLargeRule } from './memory/section-too-large.js';
 import { todoFixmeRule } from './memory/todo-fixme.js';
 import { missingEnvVarsRule } from './mcp/missing-env-vars.js';
 import { largeRuleFileRule } from './rules-dir/large-rule-file.js';
+import { skillReferenceValidRule } from './agents/skill-reference-valid.js';
+import { descriptionOverlapRule } from './agents/description-overlap.js';
+import { orphanAgentRule } from './agents/orphan-agent.js';
+import { agentReferenceValidRule } from './skills/agent-reference-valid.js';
+import { orphanSkillRule } from './skills/orphan-skill.js';
+import { contradictionKeywordsRule } from './rules-dir/contradiction-keywords.js';
+import { pluginReferenceValidRule } from './plugins/reference-valid.js';
 
 export function getAllRules(): LintRule[] {
   return [
@@ -72,5 +79,12 @@ export function getAllRules(): LintRule[] {
     todoFixmeRule,
     missingEnvVarsRule,
     largeRuleFileRule,
+    skillReferenceValidRule,
+    descriptionOverlapRule,
+    orphanAgentRule,
+    agentReferenceValidRule,
+    orphanSkillRule,
+    contradictionKeywordsRule,
+    pluginReferenceValidRule,
   ];
 }
