@@ -8,6 +8,7 @@ import { registerLintCommand } from './commands/lint.js';
 import { registerResolveCommand } from './commands/resolve.js';
 import { registerCompareCommand } from './commands/compare.js';
 import { registerSessionHandoverCommand } from './commands/session-handover.js';
+import { registerGraphCommand } from './commands/graph.js';
 
 declare const PKG_VERSION: string | undefined;
 
@@ -37,5 +38,6 @@ registerLintCommand(program);
 registerResolveCommand(program);
 registerCompareCommand(program);
 registerSessionHandoverCommand(program);
+registerGraphCommand(program);
 
 program.parse();

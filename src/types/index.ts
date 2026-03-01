@@ -27,3 +27,11 @@ export type {
 } from './lint.js';
 
 export type { AuthMethod, OsType, RuntimeInfo } from './runtime.js';
+
+export type {
+  GraphNodeType,
+  GraphEdgeType,
+  GraphNode,
+  GraphEdge,
+  DependencyGraph,
+} from './graph.js';

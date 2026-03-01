@@ -4,22 +4,36 @@
 
 **Claude Code Configuration Inspector**
 
+A CLI tool that inspects, validates, and visualizes Claude Code configurations across all layers (enterprise, user, project-shared, project-local).
+
 Scan · Lint · Resolve · Compare
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-325%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-390%20passing-brightgreen)]()
 
 </div>
 
 ---
+
+# Goal of the project
+Provide Claude Code users with full visibility and confidence that their configuration is correct, conflict-free, efficient, and behaving as intended — like a linter + debugger for your Claude Code setup.
+
+## The problem it solves
+Claude Code has a complex, layered configuration system — settings files, CLAUDE.md memory files, rules, agents, skills, commands, MCP servers, hooks, and plugins — spread across multiple locations with precedence-based merging. As projects grow, it becomes hard to:
+
+- Know what's actually in effect after all layers merge
+- Spot contradictions between levels (e.g., allow at user level, deny at project level)
+- Detect dead config (rules with globs matching nothing, orphan agents)
+- Understand token budget impact (how much context is consumed at startup)
+- Verify that configuration behaves as intended at runtime
 
 Claude Code uses **30+ config files** across **7+ locations** — and when they conflict, debugging is painful.
 
 **ccinspect** fixes that in one command:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
-🧹 **Lint** — runs 35 rules catching security gaps, dead references, conflicts, and bloat  
+🧹 **Lint** — runs 42 rules catching security gaps, dead references, conflicts, and bloat  
 🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking  
 ⚖️ **Compare** — diffs configurations across projects side-by-side  
 
@@ -45,10 +59,11 @@ cci lint
 | Command | Description |
 |---------|-------------|
 | `cci scan` | Discover and inventory all config files with sizes, token counts, and git status |
-| `cci lint` | Run 35 rules across 10 categories to find issues |
+| `cci lint` | Run 42 rules across 11 categories to find issues |
 | `cci resolve` | Show effective config after all layers merge, with origin tracking |
 | `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
 | `cci info` | Show runtime info — CLI version, active model, auth method |
+| `cci session-handover` | Generate status.md from git diff, test results, and typecheck |
 
 ## Common flags
 
@@ -65,13 +80,14 @@ cci lint
 | `memory` | 9 | CLAUDE.md quality — size, token budget, imports, sections, stale refs, TODOs |
 | `settings` | 9 | Permission security, dangerous allows, field validation, sandbox config |
 | `cross-level` | 4 | Conflicts across config layers — permissions, env vars, MCP, plugins |
-| `rules-dir` | 5 | Rule file quality — dead globs, overlaps, frontmatter, empty/large files |
-| `agents` | 2 | Agent definition frontmatter presence and validity |
-| `skills` | 2 | Skill definition frontmatter presence and validity |
+| `rules-dir` | 6 | Rule file quality — dead globs, overlaps, frontmatter, contradictions, empty/large files |
+| `agents` | 5 | Agent frontmatter, skill references, description overlap, orphan detection |
+| `skills` | 4 | Skill frontmatter, agent references, orphan detection |
 | `commands` | 1 | Command definition frontmatter validity |
 | `budget` | 1 | Startup token budget estimation |
 | `mcp` | 1 | MCP server environment variable validation |
 | `git` | 1 | Local-only files accidentally tracked in git |
+| `plugins` | 1 | Plugin references point to installed plugins |
 
 ## Configuration
 
@@ -129,7 +145,7 @@ src/
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
-tests/        Vitest test suite (325 tests)
+tests/        Vitest test suite (390 tests)
 documentation/         Configuration
 ```
 

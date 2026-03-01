@@ -1,25 +1,7 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
 import { basename } from 'path';
-
-/**
- * Extract agent names referenced in a skill's markdown body.
- */
-function extractAgentReferencesFromBody(content: string): string[] {
-  const refs: string[] = [];
-  const patterns = [
-    /\bthe\s+([\w-]+)\s+agent\b/gi,
-    /\bdelegates?\s+to\s+(?:the\s+)?([\w-]+)(?:\s+agent)?\b/gi,
-    /\buse\s+(?:the\s+)?([\w-]+)\s+agent\b/gi,
-  ];
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(content)) !== null) {
-      refs.push(match[1].toLowerCase());
-    }
-  }
-  return [...new Set(refs)];
-}
+import { findAgentReferences } from '../../utils/references.js';
 
 export const agentReferenceValidRule: LintRule = {
   id: 'skills/agent-reference-valid',
@@ -44,7 +26,7 @@ export const agentReferenceValidRule: LintRule = {
       const parsed = parseAgentMd(skill.path);
       if (!parsed) continue;
 
-      const agentRefs = extractAgentReferencesFromBody(parsed.content);
+      const agentRefs = findAgentReferences(parsed.content);
 
       for (const ref of agentRefs) {
         if (!knownAgents.has(ref)) {

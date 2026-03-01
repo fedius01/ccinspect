@@ -1,24 +1,6 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
-
-/**
- * Extract skill names referenced in an agent's markdown body.
- */
-function extractSkillReferences(content: string): string[] {
-  const refs: string[] = [];
-  const patterns = [
-    /\bthe\s+([\w-]+)\s+skill\b/gi,
-    /\buse\s+(?:the\s+)?([\w-]+)\s+skill\b/gi,
-    /\bdelegate\s+to\s+(?:the\s+)?([\w-]+)(?:\s+skill)?\b/gi,
-  ];
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(content)) !== null) {
-      refs.push(match[1].toLowerCase());
-    }
-  }
-  return refs;
-}
+import { findSkillReferences } from '../../utils/references.js';
 
 export const orphanSkillRule: LintRule = {
   id: 'skills/orphan-skill',
@@ -37,7 +19,7 @@ export const orphanSkillRule: LintRule = {
       if (!agent.exists) continue;
       const parsed = parseAgentMd(agent.path);
       if (!parsed) continue;
-      const refs = extractSkillReferences(parsed.content);
+      const refs = findSkillReferences(parsed.content);
       for (const ref of refs) {
         referencedSkills.add(ref);
       }

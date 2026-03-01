@@ -1,40 +1,7 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
-import { readFileSync } from 'fs';
 import { basename } from 'path';
-
-/**
- * Read raw markdown content from a file.
- * Used for skills and commands where we only need text content, not agent-specific parsing.
- */
-function readMarkdownContent(filePath: string): string | null {
-  try {
-    return readFileSync(filePath, 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Scan text content for agent name references.
- * Returns lowercase agent names found in the text.
- */
-function findAgentReferences(text: string): Set<string> {
-  const refs = new Set<string>();
-  // Match: "the <name> agent", "delegate to <name>", "use <name> agent"
-  const patterns = [
-    /\bthe\s+([\w-]+)\s+agent\b/gi,
-    /\bdelegate\s+to\s+(?:the\s+)?([\w-]+)(?:\s+agent)?\b/gi,
-    /\buse\s+(?:the\s+)?([\w-]+)\s+agent\b/gi,
-  ];
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      refs.add(match[1].toLowerCase());
-    }
-  }
-  return refs;
-}
+import { findAgentReferences, readMarkdownContent, nameMatchesInText } from '../../utils/references.js';
 
 export const orphanAgentRule: LintRule = {
   id: 'agents/orphan-agent',
@@ -82,19 +49,14 @@ export const orphanAgentRule: LintRule = {
     ].filter((f): f is FileInfo => f !== null && f.exists);
 
     for (const file of claudeMdFiles) {
-      try {
-        const content = readFileSync(file.path, 'utf-8').toLowerCase();
-        for (const agent of allAgents) {
-          if (!agent.exists) continue;
-          const agentName = basename(agent.path, '.md').toLowerCase();
-          const escaped = agentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const pattern = new RegExp(`\\b${escaped}\\b`);
-          if (pattern.test(content)) {
-            referencedAgents.add(agentName);
-          }
+      const content = readMarkdownContent(file.path);
+      if (!content) continue;
+      for (const agent of allAgents) {
+        if (!agent.exists) continue;
+        const agentName = basename(agent.path, '.md').toLowerCase();
+        if (nameMatchesInText(content, agentName)) {
+          referencedAgents.add(agentName);
         }
-      } catch {
-        // skip unreadable files
       }
     }
 

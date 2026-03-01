@@ -1,27 +1,7 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
 import { basename } from 'path';
-
-/**
- * Extract skill names referenced in an agent's markdown body.
- * Looks for patterns like "use the X skill", "X skill", "delegate to X skill".
- */
-function extractSkillReferencesFromBody(content: string): string[] {
-  const refs: string[] = [];
-  // Match patterns: "the <name> skill", "use <name> skill", "delegate to <name>"
-  const patterns = [
-    /\bthe\s+([\w-]+)\s+skill\b/gi,
-    /\buse\s+(?:the\s+)?([\w-]+)\s+skill\b/gi,
-    /\bdelegate\s+to\s+(?:the\s+)?([\w-]+)(?:\s+skill)?\b/gi,
-  ];
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(content)) !== null) {
-      refs.push(match[1].toLowerCase());
-    }
-  }
-  return [...new Set(refs)];
-}
+import { findSkillReferences } from '../../utils/references.js';
 
 export const skillReferenceValidRule: LintRule = {
   id: 'agents/skill-reference-valid',
@@ -65,7 +45,7 @@ export const skillReferenceValidRule: LintRule = {
       if (!parsed) continue;
 
       // Collect skill references from body text
-      const bodyRefs = extractSkillReferencesFromBody(parsed.content);
+      const bodyRefs = findSkillReferences(parsed.content);
 
       for (const ref of bodyRefs) {
         if (!knownSkills.has(ref) && !knownCommands.has(ref)) {
