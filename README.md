@@ -30,7 +30,7 @@ Claude Code has a complex, layered configuration system — settings files, CLAU
 
 Claude Code uses **30+ config files** across **7+ locations** — and when they conflict, debugging is painful.
 
-**ccinspect** fixes that in one command:
+**ccinspect** fixes that with next capabilities:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
 🧹 **Lint** — runs 42 rules catching security gaps, dead references, conflicts, and bloat
