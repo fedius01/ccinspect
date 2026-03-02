@@ -48,6 +48,11 @@ export const genericInstructionsRule: LintRule = {
           line: instruction.line,
           suggestion: 'Remove vague instruction and replace with specific, actionable guidance',
           autoFixable: false,
+          evidence: [{
+            file: file.path,
+            line: instruction.line,
+            content: `matched phrase: "${instruction.phrase}"`,
+          }],
         });
       }
 
@@ -55,10 +60,11 @@ export const genericInstructionsRule: LintRule = {
       if (extraPatterns.length > 0) {
         const lines = parsed.content.split('\n');
         for (let i = 0; i < lines.length; i++) {
-          const lowerLine = lines[i].toLowerCase();
           for (const pattern of extraPatterns) {
-            if (lowerLine.includes(pattern.toLowerCase())) {
+            const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp(`\\b${escaped}\\b`, 'i').test(lines[i])) {
               const lineText = lines[i].trim().replace(/^[-*]\s*/, '');
+              const lowerLine = lines[i].toLowerCase();
 
               // Skip if matches ignore patterns
               if (ignoreSet.size > 0 && [...ignoreSet].some((ip) => lowerLine.includes(ip))) {
@@ -74,6 +80,11 @@ export const genericInstructionsRule: LintRule = {
                 line: i + 1,
                 suggestion: 'Remove vague instruction and replace with specific, actionable guidance',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  line: i + 1,
+                  content: `matched phrase: "${pattern}"`,
+                }],
               });
               break; // one match per line is enough
             }

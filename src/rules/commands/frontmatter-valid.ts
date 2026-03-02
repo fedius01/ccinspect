@@ -1,7 +1,14 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
 
-const KNOWN_FIELDS = new Set(['description']);
+// Source: https://code.claude.com/docs/en/skills (commands merged into skills, same frontmatter)
+const KNOWN_FIELDS = new Set([
+  'description',
+  'allowed-tools',
+  'argument-hint',
+  'model',
+  'disable-model-invocation',
+]);
 
 export const commandFrontmatterValidRule: LintRule = {
   id: 'commands/frontmatter-valid',

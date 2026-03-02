@@ -17,6 +17,7 @@ export interface ImportRef {
 export interface GenericInstruction {
   text: string;
   line: number;
+  phrase: string;
 }
 
 export interface ImportChainEntry {
@@ -79,15 +80,20 @@ function matchesSectionKeywords(heading: string, keywords: string[]): boolean {
   return keywords.some((kw) => lower.includes(kw));
 }
 
+function phraseMatchesInLine(line: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(line);
+}
+
 function detectGenericInstructions(lines: string[]): GenericInstruction[] {
   const results: GenericInstruction[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const lower = lines[i].toLowerCase();
     for (const phrase of GENERIC_PHRASES) {
-      if (lower.includes(phrase)) {
+      if (phraseMatchesInLine(lines[i], phrase)) {
         results.push({
           text: lines[i].trim().replace(/^[-*]\s*/, ''),
           line: i + 1,
+          phrase,
         });
         break; // one match per line is enough
       }

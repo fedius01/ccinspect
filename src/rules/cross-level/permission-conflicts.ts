@@ -1,4 +1,4 @@
-import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig } from '../../types/index.js';
+import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 
 export const permissionConflictsRule: LintRule = {
   id: 'cross-level/permission-conflicts',
@@ -12,6 +12,11 @@ export const permissionConflictsRule: LintRule = {
     for (const conflict of resolved.permissions.conflicts) {
       const origins = conflict.rules.map((r) => `${r.action} at ${r.origin}`).join(', ');
 
+      const evidence: LintEvidence[] = conflict.rules.map((rule) => ({
+        file: rule.origin,
+        content: `${rule.action}: ${rule.pattern}`,
+      }));
+
       issues.push({
         ruleId: 'cross-level/permission-conflicts',
         severity: 'warning',
@@ -20,6 +25,7 @@ export const permissionConflictsRule: LintRule = {
         suggestion:
           'Review permission rules across settings levels and ensure consistent allow/deny for this pattern.',
         autoFixable: false,
+        evidence,
       });
     }
 

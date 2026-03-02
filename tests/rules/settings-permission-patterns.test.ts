@@ -113,4 +113,21 @@ describe('settings/permission-patterns rule', () => {
     // Should check both files
     expect(issues.length).toBeGreaterThan(0);
   });
+
+  it('includes evidence with the permission pattern', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'overconfigured', '.claude', 'settings.json'),
+      }),
+    });
+    const issues = permissionPatternsRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence!.length).toBe(1);
+      expect(issue.evidence![0].content).toContain('pattern:');
+      expect(issue.evidence![0].file).toBe(issue.file);
+    }
+  });
 });

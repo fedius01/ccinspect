@@ -10,7 +10,7 @@ Scan · Lint · Resolve · Compare
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-390%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-538%20passing-brightgreen)]()
 
 </div>
 
@@ -33,8 +33,9 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 **ccinspect** fixes that in one command:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
-🧹 **Lint** — runs 42 rules catching security gaps, dead references, conflicts, and bloat  
-🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking  
+🧹 **Lint** — runs 42 rules catching security gaps, dead references, conflicts, and bloat
+📋 **Evidence** — see exactly which lines triggered each detection
+🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking
 ⚖️ **Compare** — diffs configurations across projects side-by-side  
 
 > Fully offline. No API keys. Just point it at a project.
@@ -145,7 +146,7 @@ src/
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
-tests/        Vitest test suite (390 tests)
+tests/        Vitest test suite (538 tests)
 documentation/         Configuration
 ```
 

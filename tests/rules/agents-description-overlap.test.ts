@@ -178,4 +178,35 @@ describe('agents/description-overlap rule', () => {
     const issues = descriptionOverlapRule.check(inventory, resolved);
     expect(issues).toHaveLength(1);
   });
+
+  it('includes both descriptions and similarity score as evidence', () => {
+    const crossRef = join(FIXTURES, 'cross-reference');
+    const reviewerPath = join(crossRef, '.claude', 'agents', 'reviewer.md');
+    const similarPath = join(crossRef, '.claude', 'agents', 'similar-reviewer.md');
+    const inventory = makeInventory({
+      projectAgents: [
+        makeFileInfo({
+          path: reviewerPath,
+          relativePath: '.claude/agents/reviewer.md',
+        }),
+        makeFileInfo({
+          path: similarPath,
+          relativePath: '.claude/agents/similar-reviewer.md',
+        }),
+      ],
+    });
+    const issues = descriptionOverlapRule.check(inventory, resolved);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].evidence).toBeDefined();
+    expect(issues[0].evidence!.length).toBe(3);
+    // First two are descriptions
+    expect(issues[0].evidence![0].content).toMatch(/^description: "/);
+    expect(issues[0].evidence![1].content).toMatch(/^description: "/);
+    // Third is similarity score
+    expect(issues[0].evidence![2].content).toMatch(/^Jaccard similarity: \d+%$/);
+    // File paths match the agents
+    const evidenceFiles = issues[0].evidence!.map(e => e.file);
+    expect(evidenceFiles).toContain(reviewerPath);
+    expect(evidenceFiles).toContain(similarPath);
+  });
 });

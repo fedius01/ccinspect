@@ -81,6 +81,7 @@ export const descriptionOverlapRule: LintRule = {
           if (reported.has(pairKey)) continue;
           reported.add(pairKey);
 
+          const truncDesc = (s: string) => s.length > 100 ? s.slice(0, 100) + '...' : s;
           issues.push({
             ruleId: 'agents/description-overlap',
             severity: 'warning',
@@ -89,6 +90,11 @@ export const descriptionOverlapRule: LintRule = {
             file: a.filePath,
             suggestion: `Differentiate the descriptions to make agent routing unambiguous. "${a.name}": "${a.description}" vs "${b.name}": "${b.description}".`,
             autoFixable: false,
+            evidence: [
+              { file: a.filePath, content: `description: "${truncDesc(a.description)}"` },
+              { file: b.filePath, content: `description: "${truncDesc(b.description)}"` },
+              { file: a.filePath, content: `Jaccard similarity: ${(similarity * 100).toFixed(0)}%` },
+            ],
           });
         }
       }

@@ -151,7 +151,7 @@ describe('skills/frontmatter-valid rule', () => {
     });
     const issues = skillFrontmatterValidRule.check(inventory, resolved);
     const unknownIssues = issues.filter((i) => i.message.includes('unknown'));
-    // "license" is unknown
+    // "priority" is unknown (license is now a known field)
     expect(unknownIssues.length).toBeGreaterThan(0);
   });
 

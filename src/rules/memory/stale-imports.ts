@@ -67,6 +67,11 @@ export const staleImportsRule: LintRule = {
                   line: i + 1,
                   suggestion: 'Update the import path or remove the @import directive. The imported content will not be loaded.',
                   autoFixable: false,
+                  evidence: [{
+                    file: file.path,
+                    line: i + 1,
+                    content: lines[i].trim(),
+                  }],
                 });
               }
             } catch {
@@ -84,6 +89,11 @@ export const staleImportsRule: LintRule = {
                 line: i + 1,
                 suggestion: 'Update the import path or remove the @import directive. The imported content will not be loaded.',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  line: i + 1,
+                  content: lines[i].trim(),
+                }],
               });
             }
           }

@@ -1,7 +1,7 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 import { parseRuleMd } from '../../parsers/rules-md.js';
 
-const KNOWN_FIELDS = new Set(['paths', 'globs', 'description']);
+const KNOWN_FIELDS = new Set(['paths', 'globs', 'description', 'alwaysApply']);
 
 export const frontmatterValidRule: LintRule = {
   id: 'rules-dir/frontmatter-valid',

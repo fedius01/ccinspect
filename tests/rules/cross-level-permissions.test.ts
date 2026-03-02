@@ -132,4 +132,67 @@ describe('cross-level/permission-conflicts rule', () => {
     const issues = permissionConflictsRule.check(inventory, resolved);
     expect(issues).toHaveLength(2);
   });
+
+  it('includes evidence showing action and pattern from each origin', () => {
+    const resolved = makeResolved({
+      permissions: {
+        effectiveAllow: [],
+        effectiveDeny: [],
+        effectiveAsk: [],
+        conflicts: [
+          {
+            pattern: 'Bash(npm run *)',
+            rules: [
+              { pattern: 'Bash(npm run *)', action: 'allow', origin: '.claude/settings.json' },
+              { pattern: 'Bash(npm run *)', action: 'deny', origin: '.claude/settings.local.json' },
+            ],
+            resolution: 'deny',
+            explanation: 'Denied at local settings.',
+          },
+        ],
+        redundancies: [],
+      },
+    });
+
+    const issues = permissionConflictsRule.check(inventory, resolved);
+    expect(issues).toHaveLength(1);
+
+    const issue = issues[0];
+    expect(issue.evidence).toBeDefined();
+    expect(issue.evidence).toHaveLength(2);
+
+    // Each evidence entry shows origin file and action:pattern
+    expect(issue.evidence![0].file).toBe('.claude/settings.json');
+    expect(issue.evidence![0].content).toBe('allow: Bash(npm run *)');
+
+    expect(issue.evidence![1].file).toBe('.claude/settings.local.json');
+    expect(issue.evidence![1].content).toBe('deny: Bash(npm run *)');
+  });
+
+  it('evidence count matches conflict rules count', () => {
+    const resolved = makeResolved({
+      permissions: {
+        effectiveAllow: [],
+        effectiveDeny: [],
+        effectiveAsk: [],
+        conflicts: [
+          {
+            pattern: 'Edit(*)',
+            rules: [
+              { pattern: 'Edit(*)', action: 'allow', origin: 'user-settings' },
+              { pattern: 'Edit(*)', action: 'ask', origin: 'project-settings' },
+              { pattern: 'Edit(*)', action: 'deny', origin: 'managed-settings' },
+            ],
+            resolution: 'deny',
+            explanation: 'Managed policy overrides.',
+          },
+        ],
+        redundancies: [],
+      },
+    });
+
+    const issues = permissionConflictsRule.check(inventory, resolved);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].evidence).toHaveLength(3);
+  });
 });

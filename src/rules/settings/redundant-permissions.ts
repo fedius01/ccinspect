@@ -42,6 +42,10 @@ function findRedundancies(entries: PermEntry[]): LintIssue[] {
             file: narrow.file,
             suggestion: 'Remove the narrower pattern to reduce clutter.',
             autoFixable: false,
+            evidence: [
+              { file: narrow.file, content: `${narrow.pattern} (redundant)` },
+              { file: broad.file, content: `${broad.pattern} (already covers this)` },
+            ],
           });
           break; // one redundancy per narrow pattern is enough
         }
@@ -62,6 +66,10 @@ function findRedundancies(entries: PermEntry[]): LintIssue[] {
                 file: narrow.file,
                 suggestion: 'Remove the narrower pattern to reduce clutter.',
                 autoFixable: false,
+                evidence: [
+                  { file: narrow.file, content: `${narrow.pattern} (redundant)` },
+                  { file: broad.file, content: `${broad.pattern} (already covers this)` },
+                ],
               });
               break;
             }
@@ -90,6 +98,10 @@ function findRedundancies(entries: PermEntry[]): LintIssue[] {
               file: narrow.file,
               suggestion: 'Remove the narrower pattern to reduce clutter.',
               autoFixable: false,
+              evidence: [
+                { file: narrow.file, content: `${narrow.pattern} (redundant)` },
+                { file: broad.file, content: `${broad.pattern} (already covers this)` },
+              ],
             });
             break;
           }
@@ -101,6 +113,68 @@ function findRedundancies(entries: PermEntry[]): LintIssue[] {
   }
 
   return issues;
+}
+
+function groupByBroadPattern(rawIssues: LintIssue[]): LintIssue[] {
+  // Extract the broad pattern from each issue's message to use as grouping key.
+  // Message format: 'Redundant permission: "narrow" is already covered by "broad" in file.'
+  const groups = new Map<string, LintIssue[]>();
+
+  for (const issue of rawIssues) {
+    const broadMatch = issue.message.match(/covered by "([^"]+)"/);
+    const key = broadMatch ? broadMatch[1] : issue.message;
+
+    const group = groups.get(key) ?? [];
+    group.push(issue);
+    groups.set(key, group);
+  }
+
+  const result: LintIssue[] = [];
+
+  for (const [broadPattern, groupIssues] of groups) {
+    if (groupIssues.length <= 3) {
+      // Small group — keep individual issues (not worth grouping)
+      result.push(...groupIssues);
+    } else {
+      // Large group — collapse into single issue with sample evidence
+      const sampleSize = 5;
+
+      // Extract the narrow patterns from the individual issues
+      const narrowPatterns = groupIssues.map(issue => {
+        const match = issue.message.match(/Redundant permission: "([^"]+)"/);
+        return match ? match[1] : 'unknown';
+      });
+
+      const samplePatterns = narrowPatterns.slice(0, sampleSize);
+      const remaining = groupIssues.length - sampleSize;
+
+      const evidence = [
+        ...samplePatterns.map(p => ({
+          file: groupIssues[0].file!,
+          content: `${p} (redundant)`,
+        })),
+        {
+          file: groupIssues[0].file!,
+          content: remaining > 0
+            ? `...and ${remaining} more patterns, all covered by "${broadPattern}"`
+            : `All covered by "${broadPattern}"`,
+        },
+      ];
+
+      result.push({
+        ruleId: 'settings/redundant-permissions',
+        severity: 'info',
+        category: 'settings',
+        message: `${groupIssues.length} permissions are redundant — all covered by "${broadPattern}" in ${groupIssues[0].file}.`,
+        file: groupIssues[0].file,
+        suggestion: `Remove the ${groupIssues.length} narrower patterns. The broad pattern "${broadPattern}" already covers them all.`,
+        autoFixable: false,
+        evidence,
+      });
+    }
+  }
+
+  return result;
 }
 
 export const redundantPermissionsRule: LintRule = {
@@ -144,8 +218,14 @@ export const redundantPermissionsRule: LintRule = {
       }
     }
 
-    issues.push(...findRedundancies(allAllow));
-    issues.push(...findRedundancies(allDeny));
+    const rawIssues = [
+      ...findRedundancies(allAllow),
+      ...findRedundancies(allDeny),
+    ];
+
+    // Group issues by their broad (subsuming) pattern to reduce noise.
+    // Instead of 67 issues for "X covered by mcp__*", emit 1 grouped issue.
+    issues.push(...groupByBroadPattern(rawIssues));
 
     return issues;
   },

@@ -47,7 +47,10 @@ export const missingSectionsRule: LintRule = {
           autoFixable: false,
         });
       } else if (hasSection === undefined) {
-        // Custom section name not in the known checks — search parsed sections
+        // Custom section name not in the known checks — search parsed sections.
+        // Intentionally uses .includes() (not word-boundary regex) because heading
+        // matching should be fuzzy: "Project Overview" and "API-Commands" should
+        // match the keys "overview" and "commands" respectively, even as substrings.
         const found = parsed.sections.some(
           (s) => s.heading.toLowerCase().includes(sectionKey),
         );

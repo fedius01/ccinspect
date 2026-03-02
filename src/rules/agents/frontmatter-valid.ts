@@ -1,7 +1,17 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
 
-const KNOWN_FIELDS = new Set(['tools', 'model', 'allowedTools', 'description']);
+// Source: https://code.claude.com/docs/en/sub-agents (retrieved 2026-03-01)
+const KNOWN_FIELDS = new Set([
+  'name',
+  'description',
+  'tools',
+  'model',
+  'permissionMode',
+  'skills',
+  'memory',
+  'color',
+]);
 
 export const agentFrontmatterValidRule: LintRule = {
   id: 'agents/frontmatter-valid',

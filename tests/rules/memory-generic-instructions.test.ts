@@ -134,4 +134,51 @@ describe('memory/generic-instructions rule', () => {
     });
     expect(issues.length).toBeGreaterThan(0);
   });
+
+  it('does not false-positive on substring phrase matches (word boundary)', () => {
+    // CLAUDE.word-boundary.md has "refollowed best practices" (should NOT flag)
+    // and "follow best practices" (SHOULD flag)
+    const inventory = makeInventory({
+      projectClaudeMd: makeFileInfo({
+        path: join(FIXTURES, 'cross-reference', 'CLAUDE.word-boundary.md'),
+        relativePath: 'CLAUDE.word-boundary.md',
+      }),
+    });
+    const issues = genericInstructionsRule.check(inventory, resolved);
+    // Only the line with standalone "follow best practices" should match
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('follow best practices');
+    expect(issues[0].message).not.toContain('refollowed');
+  });
+
+  it('includes matched phrase as evidence for built-in patterns', () => {
+    const inventory = makeInventory({
+      projectClaudeMd: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', 'CLAUDE.md'),
+      }),
+    });
+    const issues = genericInstructionsRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence).toHaveLength(1);
+      expect(issue.evidence![0].content).toMatch(/^matched phrase: "/);
+      expect(issue.evidence![0].file).toBe(issue.file);
+      expect(issue.evidence![0].line).toBe(issue.line);
+    }
+  });
+
+  it('includes matched phrase as evidence for extraPatterns', () => {
+    const inventory = makeInventory({
+      projectClaudeMd: makeFileInfo({
+        path: join(FIXTURES, 'full-project', 'CLAUDE.md'),
+      }),
+    });
+    const issues = genericInstructionsRule.check(inventory, resolved, {
+      extraPatterns: ['zero-downtime'],
+    });
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0].evidence).toBeDefined();
+    expect(issues[0].evidence![0].content).toContain('matched phrase: "zero-downtime"');
+  });
 });

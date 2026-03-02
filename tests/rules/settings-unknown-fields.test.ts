@@ -114,15 +114,17 @@ describe('settings/unknown-fields rule', () => {
     expect(permIssue!.message).toContain('Did you mean "permissions"');
   });
 
-  it('does not flag known fields like env, model, plugins', () => {
+  it('does not flag known fields like env, model, permissions', () => {
     const inventory = makeInventory({
       projectSettings: makeFileInfo({
         path: join(FIXTURES, 'overconfigured', '.claude', 'settings.json'),
       }),
     });
     const issues = unknownFieldsRule.check(inventory, resolved);
-    // overconfigured settings has: permissions, env, sandbox, hooks, plugins, model — all valid
-    expect(issues).toHaveLength(0);
+    // overconfigured settings has: permissions, env, sandbox, hooks, model — all valid
+    // "plugins" is not in the official schema (enabledPlugins is the correct top-level key)
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('"plugins"');
   });
 
   it('skips non-existent settings files', () => {
@@ -131,5 +133,52 @@ describe('settings/unknown-fields rule', () => {
     });
     const issues = unknownFieldsRule.check(inventory, resolved);
     expect(issues).toHaveLength(0);
+  });
+
+  it('does not flag unknown fields in user settings (client-managed)', () => {
+    const inventory = makeInventory({
+      userSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.typos.json'),
+        relativePath: '~/.claude/settings.json',
+        scope: 'user',
+      }),
+    });
+    const issues = unknownFieldsRule.check(inventory, resolved);
+    expect(issues).toHaveLength(0);
+  });
+
+  it('does not flag unknown fields in managed settings (enterprise)', () => {
+    const inventory = makeInventory({
+      managedSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.typos.json'),
+        relativePath: '/etc/claude/managed-settings.json',
+        scope: 'enterprise',
+      }),
+    });
+    const issues = unknownFieldsRule.check(inventory, resolved);
+    expect(issues).toHaveLength(0);
+  });
+
+  it('includes evidence with field name and value preview', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.typos.json'),
+        relativePath: '.claude/settings.json',
+      }),
+    });
+    const issues = unknownFieldsRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence!.length).toBe(1);
+      expect(issue.evidence![0].content).toContain('"');
+      expect(issue.evidence![0].file).toBe(issue.file);
+    }
+
+    // Check that sandBox shows the value preview
+    const sandboxIssue = issues.find((i) => i.message.includes('sandBox'));
+    expect(sandboxIssue).toBeDefined();
+    expect(sandboxIssue!.evidence![0].content).toContain('"sandBox"');
   });
 });

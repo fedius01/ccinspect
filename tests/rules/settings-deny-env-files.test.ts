@@ -112,4 +112,17 @@ describe('settings/deny-env-files rule', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].ruleId).toBe('settings/deny-env-files');
   });
+
+  it('does not false-positive on ".environment" as .env coverage', () => {
+    // A deny pattern like "Read(./.environment-config)" contains ".env" as a substring
+    // but does NOT actually cover .env files. Should still warn.
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'cross-reference', '.claude', 'settings.json'),
+      }),
+    });
+    const issues = denyEnvFilesRule.check(inventory, resolved);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('Missing deny rules for env files');
+  });
 });

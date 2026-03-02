@@ -88,6 +88,10 @@ export const permissionPatternsRule: LintRule = {
               file: file.path,
               suggestion: `MCP patterns use double underscores: "mcp__servername__*" (all tools) or "mcp__servername__toolname" (specific tool).`,
               autoFixable: false,
+              evidence: [{
+                file: file.path,
+                content: `pattern: ${pattern}`,
+              }],
             });
           }
           continue;
@@ -105,6 +109,10 @@ export const permissionPatternsRule: LintRule = {
               file: file.path,
               suggestion: `Known tools are: ${KNOWN_TOOLS.join(', ')}. Check for typos or verify the tool name.`,
               autoFixable: false,
+              evidence: [{
+                file: file.path,
+                content: `pattern: ${pattern}`,
+              }],
             });
           }
           continue;
@@ -122,6 +130,10 @@ export const permissionPatternsRule: LintRule = {
             file: file.path,
             suggestion: `Fix the pattern to match the format "ToolName(glob)", e.g. "Bash(npm run *)" or "Read(./.env)", a bare tool name like "Bash", or an MCP pattern like "mcp__servername__*".`,
             autoFixable: false,
+            evidence: [{
+              file: file.path,
+              content: `pattern: ${pattern}`,
+            }],
           });
           continue;
         }
@@ -136,6 +148,10 @@ export const permissionPatternsRule: LintRule = {
             file: file.path,
             suggestion: `Known tools are: ${KNOWN_TOOLS.join(', ')}. Check for typos or verify the tool name.`,
             autoFixable: false,
+            evidence: [{
+              file: file.path,
+              content: `pattern: ${pattern}`,
+            }],
           });
         }
       }

@@ -42,9 +42,12 @@ export const denyEnvFilesRule: LintRule = {
       }
     }
 
-    // Check if recommended patterns are present
+    // Check if recommended patterns are present.
+    // Match .env as a filename component: .env followed by end-of-string, ), *, or .
+    // This avoids false positives like ".environment-config" matching on ".env" substring.
+    const envFilePattern = /\.env([.*)]|$)/;
     const missing = RECOMMENDED_DENY_PATTERNS.filter(
-      (pattern) => !allDenyPatterns.some((deny) => deny === pattern || deny.includes('.env')),
+      (pattern) => !allDenyPatterns.some((deny) => deny === pattern || envFilePattern.test(deny)),
     );
 
     if (missing.length > 0) {

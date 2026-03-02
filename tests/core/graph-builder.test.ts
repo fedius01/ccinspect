@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import { scan } from '../../src/core/scanner.js';
 import { buildDependencyGraph } from '../../src/core/graph-builder.js';
-import type { DependencyGraph, GraphNode } from '../../src/types/index.js';
+import type { DependencyGraph } from '../../src/types/index.js';
 
 const FIXTURES = join(import.meta.dirname, '..', 'fixtures');
 

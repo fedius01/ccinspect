@@ -122,6 +122,18 @@ describe('Scanner', () => {
     });
   });
 
+  describe('nested-skills project', () => {
+    const projectDir = join(FIXTURES, 'nested-skills');
+
+    it('discovers skills nested more than one level deep', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectSkills.length).toBe(2);
+      const skillPaths = inventory.projectSkills.map((s) => s.relativePath);
+      expect(skillPaths.some((p) => p.includes('flat-skill'))).toBe(true);
+      expect(skillPaths.some((p) => p.includes('nested-skill'))).toBe(true);
+    });
+  });
+
   describe('non-existent project', () => {
     it('handles missing project dir gracefully', () => {
       const projectDir = join(FIXTURES, 'does-not-exist');

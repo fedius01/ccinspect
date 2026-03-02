@@ -9,3 +9,4 @@ coverage/
 .claude/settings.local.json
 CLAUDE.local.md
 /docs
+/dogfood/**/*.json

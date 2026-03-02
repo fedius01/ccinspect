@@ -186,4 +186,50 @@ describe('mcp/missing-env-vars rule', () => {
     // 3. redis/REDIS_URL (placeholder: TODO)
     expect(issues).toHaveLength(3);
   });
+
+  it('does not false-positive on substring placeholder matches (word boundary)', () => {
+    // "ghp_inserted_via_vault_abc123" contains "insert" as a substring but not
+    // at a word boundary. With .includes() this would be a false positive.
+    // "todo" as a standalone value should still be flagged.
+    const inventory = makeInventory({
+      projectMcp: makeFileInfo({
+        path: join(FIXTURES, 'cross-reference', '.mcp.word-boundary.json'),
+        relativePath: '.mcp.word-boundary.json',
+      }),
+    });
+    const issues = missingEnvVarsRule.check(inventory, resolved);
+
+    // GITHUB_TOKEN "ghp_inserted_via_vault_abc123" should NOT be flagged
+    const tokenIssue = issues.find((i) => i.message.includes('GITHUB_TOKEN'));
+    expect(tokenIssue).toBeUndefined();
+
+    // API_KEY "todo" should still be flagged (standalone word)
+    const apiIssue = issues.find((i) => i.message.includes('API_KEY'));
+    expect(apiIssue).toBeDefined();
+    expect(apiIssue!.message).toContain('placeholder');
+  });
+
+  it('includes evidence showing matched pattern for placeholders', () => {
+    const inventory = makeInventory({
+      projectMcp: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.mcp.missing-env.json'),
+        relativePath: '.mcp.missing-env.json',
+      }),
+    });
+    const issues = missingEnvVarsRule.check(inventory, resolved);
+
+    // Check placeholder issue has evidence with matched pattern
+    const slackIssue = issues.find((i) => i.message.includes('SLACK_TOKEN'));
+    expect(slackIssue).toBeDefined();
+    expect(slackIssue!.evidence).toBeDefined();
+    expect(slackIssue!.evidence!.length).toBe(1);
+    expect(slackIssue!.evidence![0].content).toContain('SLACK_TOKEN');
+    expect(slackIssue!.evidence![0].content).toContain('matched pattern');
+
+    // Check empty issue has evidence
+    const emptyIssue = issues.find((i) => i.message.includes('empty env var "GITHUB_TOKEN"'));
+    expect(emptyIssue).toBeDefined();
+    expect(emptyIssue!.evidence).toBeDefined();
+    expect(emptyIssue!.evidence![0].content).toContain('empty value');
+  });
 });

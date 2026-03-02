@@ -1,5 +1,6 @@
 ---
 license: MIT
+priority: high
 ---
 
 # Bad Skill
@@ -7,4 +8,4 @@ license: MIT
 This skill has frontmatter but is missing both required fields:
 - No `name` field
 - No `description` field
-Only has an optional `license` field.
+Has optional `license` and unknown `priority` field.

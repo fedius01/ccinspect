@@ -71,6 +71,12 @@ export const orphanAgentRule: LintRule = {
       }
     }
 
+    // Count what was searched (for evidence output)
+    const searchedAgents = allAgents.filter(a => a.exists).length;
+    const searchedSkills = inventory.projectSkills.filter(s => s.exists).length;
+    const searchedClaudeMds = claudeMdFiles.length;
+    const searchedCommands = [...inventory.projectCommands, ...inventory.userCommands].filter(c => c.exists).length;
+
     // Check each agent
     for (const agent of allAgents) {
       if (!agent.exists) continue;
@@ -85,6 +91,10 @@ export const orphanAgentRule: LintRule = {
           file: agent.path,
           suggestion: 'This agent may be invoked directly by user prompts, which is fine. If it is unused, consider removing it.',
           autoFixable: false,
+          evidence: [{
+            file: agent.path,
+            content: `Searched ${searchedAgents} agents, ${searchedSkills} skills, ${searchedClaudeMds} CLAUDE.md files, ${searchedCommands} commands — no references to "${agentName}" found`,
+          }],
         });
       }
     }

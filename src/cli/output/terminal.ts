@@ -357,6 +357,14 @@ export function printLintResult(result: LintResult): void {
       const file = fileRef ? chalk.gray(fileRef.padEnd(maxFile)) : ''.padEnd(maxFile);
       console.log(`${icon} ${msg}  ${file}  ${chalk.gray(ruleId)}`);
       console.log(chalk.gray(`  \u2192 ${issue.suggestion}`));
+      if (issue.evidence && issue.evidence.length > 0) {
+        console.log(chalk.dim('  Evidence:'));
+        for (const ev of issue.evidence) {
+          const loc = ev.line ? `${ev.file}:${ev.line}` : ev.file;
+          const content = ev.content.length > 120 ? ev.content.slice(0, 120) + '\u2026' : ev.content;
+          console.log(chalk.dim(`    ${loc}  "${content}"`));
+        }
+      }
       console.log();
     }
   }

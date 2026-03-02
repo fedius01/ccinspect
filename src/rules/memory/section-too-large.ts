@@ -1,4 +1,4 @@
-import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
+import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseClaudeMd } from '../../parsers/claude-md.js';
 import { estimateTokens } from '../../utils/tokens.js';
 import { readFileSync } from 'fs';
@@ -66,6 +66,28 @@ export const sectionTooLargeRule: LintRule = {
         const exceedsPercent = percentOfFile > percentThreshold;
 
         if (exceedsTokens || exceedsPercent) {
+          // Build a preview: heading + first 2 non-empty content lines
+          const previewLines: string[] = [];
+          for (let k = 1; k < sectionLines.length && previewLines.length < 2; k++) {
+            const trimmed = sectionLines[k].trim();
+            if (trimmed.length > 0) {
+              previewLines.push(trimmed);
+            }
+          }
+
+          const evidence: LintEvidence[] = [
+            {
+              file: file.path,
+              line: section.lineStart,
+              content: sectionLines[0].trim(),
+            },
+            ...previewLines.map((line, idx) => ({
+              file: file.path,
+              line: section.lineStart + 1 + idx,
+              content: line.length > 120 ? line.slice(0, 117) + '...' : line,
+            })),
+          ];
+
           issues.push({
             ruleId: 'memory/section-too-large',
             severity: 'info',
@@ -75,6 +97,7 @@ export const sectionTooLargeRule: LintRule = {
             line: section.lineStart,
             suggestion: 'Consider extracting this section to a scoped rule file in .claude/rules/ with a paths filter, or to a separate file and @import it.',
             autoFixable: false,
+            evidence,
           });
         }
       }

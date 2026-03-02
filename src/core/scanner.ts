@@ -97,10 +97,7 @@ function discoverMdFiles(dirPath: string): string[] {
 function discoverSkillFiles(skillsDir: string): string[] {
   if (!pathExists(skillsDir)) return [];
   try {
-    return readdirSync(skillsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((dir) => join(skillsDir, dir.name, 'SKILL.md'))
-      .filter((skillPath) => pathExists(skillPath));
+    return fg.sync('**/SKILL.md', { cwd: skillsDir, absolute: true });
   } catch {
     return [];
   }

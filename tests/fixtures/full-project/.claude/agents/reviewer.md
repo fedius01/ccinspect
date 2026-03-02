@@ -3,11 +3,6 @@ tools:
   - Read
   - Bash
   - Grep
-allowedTools:
-  - "Bash(npm run lint)"
-  - "Bash(npm run test)"
-  - "Read(src/**)"
-  - "Read(tests/**)"
 model: claude-sonnet-4-20250514
 description: Code reviewer agent that checks style, correctness, and test coverage
 ---

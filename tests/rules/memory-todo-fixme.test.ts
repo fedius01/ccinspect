@@ -181,4 +181,26 @@ describe('memory/todo-fixme rule', () => {
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0].suggestion).toContain('Resolve the');
   });
+
+  it('includes evidence with the line content containing the marker', () => {
+    const inventory = makeInventory({
+      projectClaudeMd: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', 'CLAUDE.todo-markers.md'),
+        relativePath: 'CLAUDE.todo-markers.md',
+      }),
+    });
+    const issues = todoFixmeRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence).toHaveLength(1);
+      expect(issue.evidence![0].file).toBe(issue.file);
+      expect(issue.evidence![0].line).toBe(issue.line);
+      // Evidence content should contain the marker word
+      const markerMatch = issue.message.match(/Contains "(\w+)" marker/);
+      expect(markerMatch).toBeTruthy();
+      expect(issue.evidence![0].content.toUpperCase()).toContain(markerMatch![1]);
+    }
+  });
 });

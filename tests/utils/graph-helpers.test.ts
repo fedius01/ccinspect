@@ -58,7 +58,7 @@ describe('sanitizeMermaidId', () => {
     ];
     for (const input of inputs) {
       const result = sanitizeMermaidId(input);
-      expect(result).toMatch(/^[a-zA-Z_][a-zA-Z0-9_]*$/);
+      expect(result).toMatch(/^[a-zA-Z_]\w*$/);
     }
   });
 });

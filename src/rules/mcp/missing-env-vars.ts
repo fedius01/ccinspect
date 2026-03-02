@@ -5,8 +5,8 @@ function existingFiles(files: (FileInfo | null)[]): FileInfo[] {
   return files.filter((f): f is FileInfo => f !== null && f.exists);
 }
 
-const PLACEHOLDER_PATTERNS = [
-  '<your',
+/** Word-boundary matched placeholder patterns (plain words) */
+const WORD_BOUNDARY_PATTERNS = [
   'todo',
   'fixme',
   'xxx',
@@ -14,6 +14,12 @@ const PLACEHOLDER_PATTERNS = [
   'replace-me',
   'insert',
   'changeme',
+  'placeholder',
+];
+
+/** Substring-matched patterns containing non-word characters where \b doesn't apply */
+const SUBSTRING_PATTERNS = [
+  '<your', // Partial tag like "<your-slack-token>" — \b can't anchor on '<'
 ];
 
 /** Check if a value looks like an env var reference */
@@ -21,16 +27,29 @@ function isEnvReference(value: string): boolean {
   return /^\$\w+$/.test(value) || /^\$\{.+\}$/.test(value);
 }
 
+interface BadEnvResult {
+  type: 'empty' | 'placeholder';
+  matchedPattern?: string;
+}
+
 /** Check if a value is empty, whitespace-only, or an obvious placeholder */
-function isBadEnvValue(value: string): 'empty' | 'placeholder' | null {
+function isBadEnvValue(value: string): BadEnvResult | null {
   if (value.trim() === '') {
-    return 'empty';
+    return { type: 'empty' };
   }
 
   const lower = value.toLowerCase();
-  for (const pattern of PLACEHOLDER_PATTERNS) {
+
+  for (const pattern of WORD_BOUNDARY_PATTERNS) {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(lower)) {
+      return { type: 'placeholder', matchedPattern: pattern };
+    }
+  }
+
+  for (const pattern of SUBSTRING_PATTERNS) {
     if (lower.includes(pattern)) {
-      return 'placeholder';
+      return { type: 'placeholder', matchedPattern: pattern };
     }
   }
 
@@ -86,8 +105,8 @@ export const missingEnvVarsRule: LintRule = {
             // Skip env var references
             if (isEnvReference(value)) continue;
 
-            const badType = isBadEnvValue(value);
-            if (badType === 'empty') {
+            const bad = isBadEnvValue(value);
+            if (bad?.type === 'empty') {
               issues.push({
                 ruleId: 'mcp/missing-env-vars',
                 severity: 'warning',
@@ -96,8 +115,12 @@ export const missingEnvVarsRule: LintRule = {
                 file: file.path,
                 suggestion: 'Set the environment variable value, or use a .env file with dotenv.',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  content: `${varName}="" (empty value)`,
+                }],
               });
-            } else if (badType === 'placeholder') {
+            } else if (bad?.type === 'placeholder') {
               issues.push({
                 ruleId: 'mcp/missing-env-vars',
                 severity: 'warning',
@@ -106,6 +129,10 @@ export const missingEnvVarsRule: LintRule = {
                 file: file.path,
                 suggestion: 'Replace the placeholder with the actual value, or use a .env file with dotenv.',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  content: `${varName}="${value}" — matched pattern: "${bad.matchedPattern}"`,
+                }],
               });
             }
           }
@@ -143,8 +170,8 @@ export const missingEnvVarsRule: LintRule = {
           for (const [varName, value] of Object.entries(server.env)) {
             if (isEnvReference(value)) continue;
 
-            const badType = isBadEnvValue(value);
-            if (badType === 'empty') {
+            const bad = isBadEnvValue(value);
+            if (bad?.type === 'empty') {
               issues.push({
                 ruleId: 'mcp/missing-env-vars',
                 severity: 'warning',
@@ -153,8 +180,12 @@ export const missingEnvVarsRule: LintRule = {
                 file: file.path,
                 suggestion: 'Set the environment variable value, or use a .env file with dotenv.',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  content: `${varName}="" (empty value)`,
+                }],
               });
-            } else if (badType === 'placeholder') {
+            } else if (bad?.type === 'placeholder') {
               issues.push({
                 ruleId: 'mcp/missing-env-vars',
                 severity: 'warning',
@@ -163,6 +194,10 @@ export const missingEnvVarsRule: LintRule = {
                 file: file.path,
                 suggestion: 'Replace the placeholder with the actual value, or use a .env file with dotenv.',
                 autoFixable: false,
+                evidence: [{
+                  file: file.path,
+                  content: `${varName}="${value}" — matched pattern: "${bad.matchedPattern}"`,
+                }],
               });
             }
           }

@@ -123,4 +123,35 @@ describe('rules-dir/overlapping-rules rule', () => {
     const issues = overlappingRulesRule.check(inventory, resolved);
     expect(issues).toHaveLength(0);
   });
+
+  it('includes evidence with file counts and shared files when rules overlap', () => {
+    const projectRoot = join(FIXTURES, 'overconfigured');
+    const inventory = makeInventory({
+      projectRoot,
+      rules: [
+        makeRuleFileInfo({
+          path: join(projectRoot, '.claude', 'rules', 'typescript.md'),
+          relativePath: '.claude/rules/typescript.md',
+        }),
+        makeRuleFileInfo({
+          path: join(projectRoot, '.claude', 'rules', 'ts-strict.md'),
+          relativePath: '.claude/rules/ts-strict.md',
+        }),
+      ],
+    });
+    const issues = overlappingRulesRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    const issue = issues[0];
+    expect(issue.evidence).toBeDefined();
+    expect(Array.isArray(issue.evidence)).toBe(true);
+
+    // First two entries show file counts for both rules
+    expect(issue.evidence![0].content).toMatch(/matches \d+ files/);
+    expect(issue.evidence![1].content).toMatch(/matches \d+ files/);
+
+    // At least one entry shows a shared file
+    const sharedEntries = issue.evidence!.filter((e) => e.content === 'matched by both rules');
+    expect(sharedEntries.length).toBeGreaterThan(0);
+  });
 });

@@ -9,11 +9,12 @@ function existingFiles(files: (FileInfo | null)[]): FileInfo[] {
 
 /**
  * Build a regex that matches a marker as a standalone word (word boundary match).
- * Case-insensitive.
+ * Case-sensitive — default markers are uppercase (TODO, FIXME, etc.) to avoid
+ * matching lowercase prose words like "todo" in "use a todo list".
  */
 function buildMarkerRegex(markers: string[]): RegExp {
   const escaped = markers.map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return new RegExp(`\\b(${escaped.join('|')})\\b`, 'i');
+  return new RegExp(`\\b(${escaped.join('|')})\\b`);
 }
 
 /**
@@ -76,6 +77,11 @@ function scanFileForMarkers(
         line: i + 1,
         suggestion: `Resolve the ${marker} and update the instruction, or remove it if no longer relevant.`,
         autoFixable: false,
+        evidence: [{
+          file: file.path,
+          line: i + 1,
+          content: line.trim(),
+        }],
       });
     }
   }

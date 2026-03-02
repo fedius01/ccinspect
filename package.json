@@ -1,6 +1,6 @@
 {
   "name": "ccinspect",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Claude Code Configuration Inspector — analyze, lint, and resolve Claude Code configs",
   "type": "module",
   "bin": {
@@ -21,7 +21,8 @@
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "prepublishOnly": "npm run build && npm run test",
     "check-package": "npm pack --dry-run",
-    "smells": "eslint src/ && knip"
+    "smells": "eslint src/ tests/ && knip",
+    "eval:contradiction": "npx tsx tests/corpus/contradiction-keywords/eval.ts"
   },
   "engines": {
     "node": ">=20"
@@ -60,7 +61,7 @@
     "@types/picomatch": "^4.0.2",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.39.3",
-    "eslint-plugin-sonarjs": "^4.0.0",
+    "eslint-plugin-sonarjs": "4.0.0",
     "knip": "^5.85.0",
     "prettier": "^3.5.0",
     "tsup": "^8.4.0",

@@ -20,6 +20,7 @@ export type {
 export type {
   Severity,
   IssueCategory,
+  LintEvidence,
   LintIssue,
   LintRule,
   LintConfig,

@@ -167,4 +167,28 @@ describe('memory/section-too-large rule', () => {
     // Key Commands at 216 tokens is the largest — well under 500
     expect(issues).toHaveLength(0);
   });
+
+  it('includes evidence with section heading and content preview', () => {
+    const projectRoot = join(FIXTURES, 'overconfigured');
+    const inventory = makeInventory({
+      projectRoot,
+      projectClaudeMd: makeFileInfo({
+        path: join(projectRoot, 'CLAUDE.large-section.md'),
+        relativePath: 'CLAUDE.large-section.md',
+      }),
+    });
+    const issues = sectionTooLargeRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    const issue = issues[0];
+    expect(issue.evidence).toBeDefined();
+    expect(issue.evidence!.length).toBeGreaterThanOrEqual(1);
+    // First evidence item should be the section heading
+    expect(issue.evidence![0].content).toMatch(/^#+\s/);
+    expect(issue.evidence![0].line).toBe(issue.line);
+    // Should have content preview lines if section has content
+    if (issue.evidence!.length > 1) {
+      expect(issue.evidence![1].content.length).toBeGreaterThan(0);
+    }
+  });
 });

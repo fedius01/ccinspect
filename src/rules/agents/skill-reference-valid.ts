@@ -47,8 +47,21 @@ export const skillReferenceValidRule: LintRule = {
       // Collect skill references from body text
       const bodyRefs = findSkillReferences(parsed.content);
 
-      for (const ref of bodyRefs) {
+      // Filter body text refs to only flag deliberate skill identifiers.
+      // Real skill names are typically hyphenated (e.g., "presentation-structure",
+      // "vibe-to-agentic-framework"). Single common words like "framework",
+      // "structure", "specialized" are prose noise, not skill references.
+      // Frontmatter `skills` field (checked separately below) handles explicit refs.
+      const filteredBodyRefs = new Set(
+        [...bodyRefs].filter(ref => ref.includes('-'))
+      );
+
+      const contentLines = parsed.content.split('\n');
+      for (const ref of filteredBodyRefs) {
         if (!knownSkills.has(ref) && !knownCommands.has(ref)) {
+          const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const refPattern = new RegExp(`\\b${escaped}\\b`, 'i');
+          const matchIdx = contentLines.findIndex(l => refPattern.test(l));
           issues.push({
             ruleId: 'agents/skill-reference-valid',
             severity: 'error',
@@ -57,7 +70,38 @@ export const skillReferenceValidRule: LintRule = {
             file: agent.path,
             suggestion: `Create the skill at .claude/skills/${ref}/SKILL.md or remove the reference.`,
             autoFixable: false,
+            evidence: matchIdx >= 0 ? [{
+              file: agent.path,
+              line: matchIdx + 1,
+              content: contentLines[matchIdx].trim().slice(0, 120),
+            }] : undefined,
           });
+        }
+      }
+
+      // Also validate frontmatter `skills` field if present (explicit references, always reliable)
+      if (parsed.hasFrontmatter && parsed.frontmatter.skills) {
+        let skillsList: string[];
+        if (typeof parsed.frontmatter.skills === 'string') {
+          skillsList = parsed.frontmatter.skills.split(',').map((s: string) => s.trim().toLowerCase());
+        } else if (Array.isArray(parsed.frontmatter.skills)) {
+          skillsList = (parsed.frontmatter.skills as string[]).map((s: string) => s.toLowerCase());
+        } else {
+          skillsList = [];
+        }
+
+        for (const ref of skillsList) {
+          if (ref && !knownSkills.has(ref) && !knownCommands.has(ref)) {
+            issues.push({
+              ruleId: 'agents/skill-reference-valid',
+              severity: 'error',
+              category: 'agents',
+              message: `Agent ${agent.relativePath} references skill "${ref}" in frontmatter which does not exist.`,
+              file: agent.path,
+              suggestion: `Create the skill at .claude/skills/${ref}/SKILL.md or remove it from the skills field.`,
+              autoFixable: false,
+            });
+          }
         }
       }
     }

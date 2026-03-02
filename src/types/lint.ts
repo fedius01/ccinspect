@@ -16,6 +16,12 @@ export type IssueCategory =
   | 'plugins'
   | 'git';
 
+export interface LintEvidence {
+  file: string;          // File path where evidence was found
+  line?: number;         // Line number (1-indexed), if applicable
+  content: string;       // The matched text, value, or descriptive content
+}
+
 export interface LintIssue {
   ruleId: string;
   severity: Severity;
@@ -25,6 +31,7 @@ export interface LintIssue {
   line?: number;
   suggestion: string;
   autoFixable: boolean;
+  evidence?: LintEvidence[];
 }
 
 export interface LintRule {

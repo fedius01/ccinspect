@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__*",
+      "mcp__github__create_issue",
+      "mcp__github__list_repos",
+      "mcp__github__create_pr",
+      "mcp__github__close_issue",
+      "mcp__github__search_code"
+    ]
+  }
+}

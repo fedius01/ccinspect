@@ -1,4 +1,4 @@
-import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig } from '../../types/index.js';
+import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 import { parseRuleMd, type ParsedRule } from '../../parsers/rules-md.js';
 
 const DEFAULT_THRESHOLD = 0.8;
@@ -47,6 +47,32 @@ export const overlappingRulesRule: LintRule = {
         const overlapRatio = intersection.length / minSize;
 
         if (overlapRatio > threshold) {
+          const sampleSize = 5;
+          const sample = intersection.slice(0, sampleSize);
+          const remaining = intersection.length - sample.length;
+
+          const evidence: LintEvidence[] = [
+            {
+              file: a.filePath,
+              content: `matches ${a.matchedFiles.length} files`,
+            },
+            {
+              file: b.filePath,
+              content: `matches ${b.matchedFiles.length} files`,
+            },
+            ...sample.map((f) => ({
+              file: f,
+              content: 'matched by both rules',
+            })),
+          ];
+
+          if (remaining > 0) {
+            evidence.push({
+              file: a.filePath,
+              content: `...and ${remaining} more shared files`,
+            });
+          }
+
           issues.push({
             ruleId: 'rules-dir/overlapping-rules',
             severity: 'info',
@@ -56,6 +82,7 @@ export const overlappingRulesRule: LintRule = {
             suggestion:
               'These rules target largely the same files. Consider merging them or narrowing their path globs to avoid redundancy.',
             autoFixable: false,
+            evidence,
           });
         }
       }

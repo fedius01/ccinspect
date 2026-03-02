@@ -129,4 +129,65 @@ describe('settings/redundant-permissions rule', () => {
     const issues = redundantPermissionsRule.check(inventory, resolved);
     expect(issues).toHaveLength(0);
   });
+
+  it('includes evidence showing both narrow and broad patterns', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.redundant.json'),
+        relativePath: '.claude/settings.redundant.json',
+      }),
+    });
+    const issues = redundantPermissionsRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence!.length).toBeGreaterThanOrEqual(2);
+      // First evidence item is the redundant (narrow) pattern
+      expect(issue.evidence![0].content).toContain('(redundant)');
+    }
+  });
+
+  it('groups redundant issues when >3 share the same broad pattern', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.redundant-grouped.json'),
+        relativePath: '.claude/settings.redundant-grouped.json',
+      }),
+    });
+    const issues = redundantPermissionsRule.check(inventory, resolved);
+
+    // 5 MCP patterns covered by mcp__* — should be grouped into 1 issue
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('5 permissions are redundant');
+    expect(issues[0].message).toContain('mcp__*');
+    expect(issues[0].severity).toBe('info');
+    expect(issues[0].ruleId).toBe('settings/redundant-permissions');
+
+    // Evidence should contain sample patterns + summary
+    expect(issues[0].evidence).toBeDefined();
+    expect(issues[0].evidence!.length).toBeGreaterThan(1);
+    // Last evidence item is the summary
+    const lastEvidence = issues[0].evidence![issues[0].evidence!.length - 1];
+    expect(lastEvidence.content).toContain('mcp__*');
+  });
+
+  it('keeps groups of <=3 as individual issues', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.redundant.json'),
+        relativePath: '.claude/settings.redundant.json',
+      }),
+    });
+    const issues = redundantPermissionsRule.check(inventory, resolved);
+
+    // Each broad pattern covers at most 2 narrows — stays individual
+    // Verify mcp__* group has 2 individual issues (not grouped)
+    const mcpIssues = issues.filter((i) => i.message.includes('mcp__'));
+    expect(mcpIssues).toHaveLength(2);
+    // Each should have 2 evidence items (narrow + broad)
+    for (const issue of mcpIssues) {
+      expect(issue.evidence).toHaveLength(2);
+    }
+  });
 });

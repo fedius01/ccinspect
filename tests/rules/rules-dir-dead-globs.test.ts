@@ -77,6 +77,28 @@ describe('rules-dir/dead-globs rule', () => {
     expect(issues[0].category).toBe('rules');
   });
 
+  it('includes dead glob patterns as evidence', () => {
+    const projectRoot = join(FIXTURES, 'overconfigured');
+    const rulePath = join(projectRoot, '.claude', 'rules', 'dead-rule.md');
+    const inventory = makeInventory({
+      projectRoot,
+      rules: [
+        makeRuleFileInfo({
+          path: rulePath,
+          relativePath: '.claude/rules/dead-rule.md',
+        }),
+      ],
+    });
+    const issues = deadGlobsRule.check(inventory, resolved);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].evidence).toBeDefined();
+    expect(issues[0].evidence!.length).toBe(2);
+    expect(issues[0].evidence![0].file).toBe(rulePath);
+    expect(issues[0].evidence![0].content).toContain('nonexistent/**/*.xyz');
+    expect(issues[0].evidence![0].content).toContain('matched 0 files');
+    expect(issues[0].evidence![1].content).toContain('old-src/**/*.legacy');
+  });
+
   it('passes for live rules (globs match files)', () => {
     const projectRoot = join(FIXTURES, 'overconfigured');
     const inventory = makeInventory({

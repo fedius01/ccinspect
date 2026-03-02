@@ -117,4 +117,23 @@ describe('memory/stale-imports rule', () => {
     // All issues should have line numbers
     expect(issues.every((i) => typeof i.line === 'number' && i.line > 0)).toBe(true);
   });
+
+  it('includes evidence with the import line content', () => {
+    const inventory = makeInventory({
+      projectClaudeMd: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', 'CLAUDE.stale-imports.md'),
+        relativePath: 'CLAUDE.stale-imports.md',
+      }),
+    });
+    const issues = staleImportsRule.check(inventory, resolved);
+    expect(issues.length).toBeGreaterThan(0);
+
+    for (const issue of issues) {
+      expect(issue.evidence).toBeDefined();
+      expect(issue.evidence!.length).toBe(1);
+      expect(issue.evidence![0].content).toContain('@');
+      expect(issue.evidence![0].file).toBe(issue.file);
+      expect(issue.evidence![0].line).toBe(issue.line);
+    }
+  });
 });

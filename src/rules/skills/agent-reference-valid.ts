@@ -28,8 +28,21 @@ export const agentReferenceValidRule: LintRule = {
 
       const agentRefs = findAgentReferences(parsed.content);
 
-      for (const ref of agentRefs) {
+      // Filter body text refs to only flag deliberate agent identifiers.
+      // Real agent names are typically hyphenated (e.g., "code-reviewer",
+      // "deploy-manager"). Single common words like "specialized", "framework"
+      // are prose noise, not agent references.
+      const filteredAgentRefs = new Set(
+        [...agentRefs].filter(ref => ref.includes('-'))
+      );
+
+      const contentLines = parsed.content.split('\n');
+
+      for (const ref of filteredAgentRefs) {
         if (!knownAgents.has(ref)) {
+          const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const refPattern = new RegExp(`\\b${escaped}\\b`, 'i');
+          const matchIdx = contentLines.findIndex(l => refPattern.test(l));
           issues.push({
             ruleId: 'skills/agent-reference-valid',
             severity: 'error',
@@ -38,6 +51,11 @@ export const agentReferenceValidRule: LintRule = {
             file: skill.path,
             suggestion: `Create the agent at .claude/agents/${ref}.md or remove the reference.`,
             autoFixable: false,
+            evidence: matchIdx >= 0 ? [{
+              file: skill.path,
+              line: matchIdx + 1,
+              content: contentLines[matchIdx].trim().slice(0, 120),
+            }] : undefined,
           });
         }
       }

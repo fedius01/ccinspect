@@ -27,6 +27,12 @@ export function printLintResultMarkdown(result: LintResult): string {
       const message = issue.message.replace(/\|/g, '\\|');
       const suggestion = issue.suggestion.replace(/\|/g, '\\|');
       lines.push(`| ${severity} | \`${issue.ruleId}\` | ${message} | ${file} | ${suggestion} |`);
+      if (issue.evidence && issue.evidence.length > 0) {
+        for (const ev of issue.evidence) {
+          const loc = ev.line ? `${ev.file}:${ev.line}` : ev.file;
+          lines.push(`| | | \`${loc}\` — "${ev.content.replace(/\|/g, '\\|')}" | | |`);
+        }
+      }
     }
     lines.push('');
   }

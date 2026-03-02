@@ -85,8 +85,8 @@ describe('agents/orphan-agent rule', () => {
     const inventory = makeInventory({
       projectAgents: [
         makeFileInfo({
-          path: join(crossRef, '.claude', 'agents', 'reviewer.md'),
-          relativePath: '.claude/agents/reviewer.md',
+          path: join(crossRef, '.claude', 'agents', 'code-reviewer.md'),
+          relativePath: '.claude/agents/code-reviewer.md',
         }),
       ],
       projectSkills: [
@@ -97,8 +97,8 @@ describe('agents/orphan-agent rule', () => {
       ],
     });
     const issues = orphanAgentRule.check(inventory, resolved);
-    // code-review SKILL.md says "Delegates to the reviewer agent"
-    const reviewerIssue = issues.find((i) => i.message.includes('"reviewer"'));
+    // code-review SKILL.md says "Delegates to the code-reviewer agent"
+    const reviewerIssue = issues.find((i) => i.message.includes('"code-reviewer"'));
     expect(reviewerIssue).toBeUndefined();
   });
 
@@ -146,5 +146,34 @@ describe('agents/orphan-agent rule', () => {
     });
     const issues = orphanAgentRule.check(inventory, resolved);
     expect(issues).toHaveLength(0);
+  });
+
+  it('includes evidence summarizing the search scope', () => {
+    const crossRef = join(FIXTURES, 'cross-reference');
+    const inventory = makeInventory({
+      projectAgents: [
+        makeFileInfo({
+          path: join(crossRef, '.claude', 'agents', 'orphan.md'),
+          relativePath: '.claude/agents/orphan.md',
+        }),
+      ],
+      projectSkills: [
+        makeFileInfo({
+          path: join(crossRef, '.claude', 'skills', 'code-review', 'SKILL.md'),
+          relativePath: '.claude/skills/code-review/SKILL.md',
+        }),
+      ],
+    });
+    const issues = orphanAgentRule.check(inventory, resolved);
+    const orphanIssue = issues.find((i) => i.message.includes('"orphan"'));
+    expect(orphanIssue).toBeDefined();
+    expect(orphanIssue!.evidence).toBeDefined();
+    expect(orphanIssue!.evidence).toHaveLength(1);
+    expect(orphanIssue!.evidence![0].content).toContain('Searched');
+    expect(orphanIssue!.evidence![0].content).toContain('agents');
+    expect(orphanIssue!.evidence![0].content).toContain('skills');
+    expect(orphanIssue!.evidence![0].content).toContain('CLAUDE.md files');
+    expect(orphanIssue!.evidence![0].content).toContain('commands');
+    expect(orphanIssue!.evidence![0].content).toContain('"orphan"');
   });
 });

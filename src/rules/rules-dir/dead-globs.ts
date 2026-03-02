@@ -21,6 +21,7 @@ export const deadGlobsRule: LintRule = {
       }
 
       if (parsed.isDead) {
+        const deadGlobs = (parsed.frontmatter.globs ?? parsed.frontmatter.paths) as string[] | undefined;
         issues.push({
           ruleId: 'rules-dir/dead-globs',
           severity: 'warning',
@@ -30,6 +31,10 @@ export const deadGlobsRule: LintRule = {
           suggestion:
             'Rule file has path globs that match no files in the project. Consider removing or updating the paths.',
           autoFixable: false,
+          evidence: deadGlobs?.map(g => ({
+            file: rule.path,
+            content: `glob "${g}" matched 0 files`,
+          })),
         });
       }
     }

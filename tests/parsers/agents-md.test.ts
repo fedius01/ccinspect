@@ -23,12 +23,6 @@ describe('agents-md parser', () => {
       expect(result.frontmatter.tools).toEqual(['Read', 'Bash', 'Grep']);
     });
 
-    it('extracts allowedTools array', () => {
-      const result = parseAgentMd(filePath)!;
-      expect(result.frontmatter.allowedTools).toBeInstanceOf(Array);
-      expect(result.frontmatter.allowedTools).toContain('Bash(npm run lint)');
-    });
-
     it('extracts model string', () => {
       const result = parseAgentMd(filePath)!;
       expect(result.frontmatter.model).toBe('claude-sonnet-4-20250514');

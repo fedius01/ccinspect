@@ -1,50 +1,111 @@
-import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig } from '../../types/index.js';
+import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 import { parseRuleMd } from '../../parsers/rules-md.js';
 
 /**
- * Pairs of contradictory keywords/phrases.
- * If rule A contains phrase from column 1 and rule B contains phrase from column 2
- * (and their globs overlap), flag a potential contradiction.
+ * Tool/technology categories for auto-generating contradiction pairs.
+ * Each category maps to a list of tools where using one typically excludes the others.
+ *
+ * Note: `biome` intentionally appears in both `formatter` and `linter` categories.
+ * This is safe because pairs are generated intra-category — it produces
+ * `['use biome', 'use prettier', 'formatter']` and `['use biome', 'use eslint', 'linter']`,
+ * which are distinct pairs with different category labels.
  */
-const CONTRADICTION_PAIRS: Array<[string, string, string]> = [
-  // [phraseA, phraseB, category label]
-  ['always use', 'never use', 'always use vs never use'],
-  ['always require', 'never require', 'always require vs never require'],
-  ['always include', 'never include', 'always include vs never include'],
-  ['must not', 'must', 'must vs must not'],
-  ['must never', 'must', 'must vs must never'],
-  ['use tabs', 'use spaces', 'tabs vs spaces'],
-  ['use jest', 'use vitest', 'jest vs vitest'],
-  ['use mocha', 'use jest', 'mocha vs jest'],
-  ['use npm', 'use yarn', 'npm vs yarn'],
-  ['use npm', 'use pnpm', 'npm vs pnpm'],
-  ['use yarn', 'use pnpm', 'yarn vs pnpm'],
-  ['use semicolons', 'no semicolons', 'semicolons'],
-  ['single quotes', 'double quotes', 'quote style'],
-];
+export const TOOL_CATEGORIES: Record<string, string[]> = {
+  'test-runner': ['jest', 'vitest', 'mocha', 'ava'],
+  'package-manager': ['npm', 'yarn', 'pnpm', 'bun'],
+  'formatter': ['prettier', 'biome', 'dprint'],
+  'linter': ['eslint', 'biome', 'oxlint'],
+  'bundler': ['webpack', 'vite', 'esbuild', 'turbopack', 'rollup'],
+  'css-approach': ['css modules', 'tailwind', 'styled-components', 'emotion'],
+  'state-management': ['redux', 'zustand', 'mobx', 'jotai', 'recoil'],
+  'component-style': ['class components', 'functional components'],
+  'rendering-model': ['server components', 'client components'],
+  'async-pattern': ['async/await', 'callbacks', 'promises'],
+  'import-style': ['relative imports', 'absolute imports', 'path aliases'],
+  'export-style': ['default export', 'named export'],
+  'quote-style': ['single quotes', 'double quotes'],
+  'indent-style': ['tabs', 'spaces'],
+};
 
-function hasPhrase(text: string, phrase: string): boolean {
-  return text.includes(phrase);
+/**
+ * Generate contradiction pairs from TOOL_CATEGORIES.
+ * Single-word tools get "use " prefix; multi-word phrases are used as-is.
+ */
+export function generateCategoryPairs(): Array<[string, string, string]> {
+  const pairs: Array<[string, string, string]> = [];
+  for (const [category, tools] of Object.entries(TOOL_CATEGORIES)) {
+    for (let i = 0; i < tools.length; i++) {
+      for (let j = i + 1; j < tools.length; j++) {
+        const a = tools[i].includes(' ') ? tools[i] : `use ${tools[i]}`;
+        const b = tools[j].includes(' ') ? tools[j] : `use ${tools[j]}`;
+        pairs.push([a, b, category]);
+      }
+    }
+  }
+  return pairs;
 }
 
 /**
- * Check if two rules have overlapping globs.
+ * Explicit contradiction pairs that don't fit the category model.
+ * These involve negation patterns (always/never, use/no).
+ */
+const EXPLICIT_PAIRS: Array<[string, string, string]> = [
+  ['always use', 'never use', 'always use vs never use'],
+  ['always require', 'never require', 'always require vs never require'],
+  ['always include', 'never include', 'always include vs never include'],
+  ['use semicolons', 'no semicolons', 'semicolons'],
+];
+
+const CONTRADICTION_PAIRS: Array<[string, string, string]> = [
+  ...EXPLICIT_PAIRS,
+  ...generateCategoryPairs(),
+];
+
+function hasPhrase(text: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+}
+
+/**
+ * Check if two rules have overlapping globs using segment-based comparison.
  * If either rule has no globs, it applies everywhere — overlaps with everything.
  */
-function globsOverlap(globsA: string[], globsB: string[]): boolean {
+export function globsOverlap(globsA: string[], globsB: string[]): boolean {
   if (globsA.length === 0 || globsB.length === 0) return true;
 
-  // Simple overlap detection: check if any glob prefix matches
   for (const a of globsA) {
     for (const b of globsB) {
       if (a === b) return true;
-      // If they share a common prefix pattern (e.g., "src/**" and "src/**/*.ts")
-      const aBase = a.replace(/\*.*$/, '');
-      const bBase = b.replace(/\*.*$/, '');
-      if (aBase.startsWith(bBase) || bBase.startsWith(aBase)) return true;
+
+      // Compare directory segments (not character prefixes)
+      const aSegments = a.replace(/\*.*$/, '').split('/').filter(Boolean);
+      const bSegments = b.replace(/\*.*$/, '').split('/').filter(Boolean);
+
+      // If either has no segments after stripping (e.g., "**"), it's global scope
+      if (aSegments.length === 0 || bSegments.length === 0) return true;
+
+      // Check if one path is a prefix of the other by segments
+      const minLen = Math.min(aSegments.length, bSegments.length);
+      let segmentsMatch = true;
+      for (let k = 0; k < minLen; k++) {
+        if (aSegments[k] !== bSegments[k]) {
+          segmentsMatch = false;
+          break;
+        }
+      }
+      if (segmentsMatch) return true;
     }
   }
   return false;
+}
+
+function findMatchLine(lines: string[], phrase: string): { line: number; content: string } | null {
+  for (let i = 0; i < lines.length; i++) {
+    if (hasPhrase(lines[i], phrase)) {
+      return { line: i + 1, content: lines[i].trim() };
+    }
+  }
+  return null;
 }
 
 export const contradictionKeywordsRule: LintRule = {
@@ -63,6 +124,7 @@ export const contradictionKeywordsRule: LintRule = {
       filePath: string;
       relativePath: string;
       text: string;
+      lines: string[];
       globs: string[];
     }> = [];
 
@@ -74,6 +136,7 @@ export const contradictionKeywordsRule: LintRule = {
       const fullText = (parsed.content || '').toLowerCase();
       if (fullText.trim().length === 0) continue;
 
+      const lines = fullText.split('\n');
       const globs = parsed.frontmatter.globs ?? parsed.frontmatter.paths;
       const globList = Array.isArray(globs) ? globs.filter((g): g is string => typeof g === 'string') : [];
 
@@ -81,6 +144,7 @@ export const contradictionKeywordsRule: LintRule = {
         filePath: rule.path,
         relativePath: rule.relativePath,
         text: fullText,
+        lines,
         globs: globList,
       });
     }
@@ -102,19 +166,20 @@ export const contradictionKeywordsRule: LintRule = {
           const aHasSecond = hasPhrase(ruleA.text, phraseB);
           const bHasFirst = hasPhrase(ruleB.text, phraseA);
 
-          // Skip if "must" is actually part of "must not" / "must never"
-          if (phraseB === 'must') {
-            const bHasMustNot = hasPhrase(ruleB.text, 'must not') || hasPhrase(ruleB.text, 'must never');
-            const aHasMustNot = hasPhrase(ruleA.text, 'must not') || hasPhrase(ruleA.text, 'must never');
-
-            if (aHasFirst && bHasSecond && bHasMustNot) continue;
-            if (aHasSecond && bHasFirst && aHasMustNot) continue;
-          }
-
           if ((aHasFirst && bHasSecond) || (aHasSecond && bHasFirst)) {
             const pairKey = [ruleA.filePath, ruleB.filePath, category].sort().join('|');
             if (reported.has(pairKey)) continue;
             reported.add(pairKey);
+
+            // Determine which phrase was found in which file for evidence
+            const matchedPhraseInA = aHasFirst ? phraseA : phraseB;
+            const matchedPhraseInB = aHasFirst ? phraseB : phraseA;
+            const evidenceA = findMatchLine(ruleA.lines, matchedPhraseInA);
+            const evidenceB = findMatchLine(ruleB.lines, matchedPhraseInB);
+
+            const evidence: LintEvidence[] = [];
+            if (evidenceA) evidence.push({ file: ruleA.filePath, line: evidenceA.line, content: evidenceA.content });
+            if (evidenceB) evidence.push({ file: ruleB.filePath, line: evidenceB.line, content: evidenceB.content });
 
             issues.push({
               ruleId: 'rules-dir/contradiction-keywords',
@@ -124,6 +189,7 @@ export const contradictionKeywordsRule: LintRule = {
               file: ruleA.filePath,
               suggestion: `Review both rule files for conflicting instructions about ${category}. One says "${phraseA}" while the other says "${phraseB}".`,
               autoFixable: false,
+              evidence: evidence.length > 0 ? evidence : undefined,
             });
           }
         }
