@@ -11,7 +11,7 @@ import { globArraysOverlap } from '../../utils/glob-overlap.js';
  * `['use biome', 'use prettier', 'formatter']` and `['use biome', 'use eslint', 'linter']`,
  * which are distinct pairs with different category labels.
  */
-export const TOOL_CATEGORIES: Record<string, string[]> = {
+const TOOL_CATEGORIES: Record<string, string[]> = {
   'test-runner': ['jest', 'vitest', 'mocha', 'ava'],
   'package-manager': ['npm', 'yarn', 'pnpm', 'bun'],
   'formatter': ['prettier', 'biome', 'dprint'],

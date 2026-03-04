@@ -3,7 +3,7 @@ import type { ParsedRule } from '../parsers/rules-md';
 
 // --- Types ---
 
-export interface GlobScope {
+interface GlobScope {
   base: string; // literal directory prefix (e.g., "src/components")
   glob: string; // the wildcard portion (e.g., "**/*.ts")
   extensions: string[] | null; // file extensions the pattern constrains to, null = any
