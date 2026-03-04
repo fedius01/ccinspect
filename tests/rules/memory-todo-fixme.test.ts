@@ -64,9 +64,7 @@ function makeRuleFileInfo(overrides: Partial<RuleFileInfo> = {}): RuleFileInfo {
     estimatedTokens: 50,
     gitTracked: true,
     lastModified: new Date(),
-    frontmatter: {},
-    matchedFiles: [],
-    isDead: false,
+
     ...overrides,
   };
 }

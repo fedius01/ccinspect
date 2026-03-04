@@ -25,16 +25,16 @@ describe('Graph Builder', () => {
     it('creates correct total number of nodes (connected + orphans)', () => {
       const g = getGraph();
       const total = g.nodes.length + g.orphans.length;
-      // Expected: CLAUDE.md (1), agents (3), skills (2), commands (1), rules (2), MCP (1) = 10
-      // Some may be orphaned, but the total should be 10
-      expect(total).toBe(10);
+      // Expected: CLAUDE.md (1), docs/setup.md (1, import target), agents (3), skills (2), commands (1), rules (2), MCP (1) = 11
+      // Some may be orphaned, but the total should be 11
+      expect(total).toBe(11);
     });
 
     it('creates CLAUDE.md nodes', () => {
       const g = getGraph();
       const allNodes = [...g.nodes, ...g.orphans];
       const claudeNodes = allNodes.filter((n) => n.type === 'claude-md');
-      expect(claudeNodes.length).toBe(1); // Only project CLAUDE.md (no global/local)
+      expect(claudeNodes.length).toBe(2); // Project CLAUDE.md + docs/setup.md (import target)
     });
 
     it('creates agent nodes', () => {
@@ -102,7 +102,10 @@ describe('Graph Builder', () => {
     it('nodes have tokens > 0 for real files', () => {
       const g = getGraph();
       const allNodes = [...g.nodes, ...g.orphans];
-      const fileNodes = allNodes.filter((n) => n.type !== 'mcp-server');
+      // Exclude MCP servers (virtual) and import-target nodes (created with tokens: 0)
+      const fileNodes = allNodes.filter(
+        (n) => n.type !== 'mcp-server' && !n.label.includes('/'),
+      );
       for (const node of fileNodes) {
         expect(node.tokens).toBeGreaterThan(0);
       }
@@ -118,9 +121,9 @@ describe('Graph Builder', () => {
         (e) => e.source.includes('CLAUDE.md') && e.target.includes('setup.md'),
       );
       expect(claudeToSetup).toBeDefined();
-      // docs/setup.md is not a known node type, so it may be broken
-      // (it's not in the inventory as a config component)
-      expect(claudeToSetup!.isBroken).toBe(true);
+      // docs/setup.md exists on disk — import is not broken.
+      // A node is created for it even though it's not a config component.
+      expect(claudeToSetup!.isBroken).toBe(false);
     });
 
     it('detects delegation edge from reviewer to architect', () => {

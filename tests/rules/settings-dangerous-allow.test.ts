@@ -123,6 +123,89 @@ describe('settings/dangerous-allow rule', () => {
     expect(readIssue).toBeUndefined();
   });
 
+  it('warns for wildcard ToolName(*) patterns', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    // Should flag: Bash(*), Write(*), Edit(*), Task(*) — 4 patterns
+    // Should NOT flag: Read(*), Bash(npm run *), Bash(git *)
+    expect(issues).toHaveLength(4);
+    expect(issues.every((i) => i.severity === 'warning')).toBe(true);
+  });
+
+  it('flags Bash(*) with correct message', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const bashIssue = issues.find((i) => i.message.includes('"Bash(*)"'));
+    expect(bashIssue).toBeDefined();
+    expect(bashIssue!.message).toContain('unrestricted shell access');
+  });
+
+  it('flags Edit(*) with correct message', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const editIssue = issues.find((i) => i.message.includes('"Edit(*)"'));
+    expect(editIssue).toBeDefined();
+    expect(editIssue!.message).toContain('allows editing any file');
+  });
+
+  it('flags Write(*) with correct message', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const writeIssue = issues.find((i) => i.message.includes('"Write(*)"'));
+    expect(writeIssue).toBeDefined();
+    expect(writeIssue!.message).toContain('allows writing to any file');
+  });
+
+  it('flags Task(*) with correct message', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const taskIssue = issues.find((i) => i.message.includes('"Task(*)"'));
+    expect(taskIssue).toBeDefined();
+    expect(taskIssue!.message).toContain('allows spawning any sub-agent');
+  });
+
+  it('does not flag Read(*) wildcard', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const readIssue = issues.find((i) => i.message.includes('"Read(*)"'));
+    expect(readIssue).toBeUndefined();
+  });
+
+  it('does not flag scoped Bash(npm run *) pattern', () => {
+    const inventory = makeInventory({
+      projectSettings: makeFileInfo({
+        path: join(FIXTURES, 'conflicting', '.claude', 'settings.dangerous-wildcard.json'),
+      }),
+    });
+    const issues = dangerousAllowRule.check(inventory, resolved);
+    const scopedIssue = issues.find((i) => i.message.includes('"Bash(npm run *)"'));
+    expect(scopedIssue).toBeUndefined();
+  });
+
   it('skips non-existent settings files', () => {
     const inventory = makeInventory({
       projectSettings: makeFileInfo({ exists: false }),

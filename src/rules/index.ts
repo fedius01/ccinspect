@@ -41,6 +41,7 @@ import { agentReferenceValidRule } from './skills/agent-reference-valid.js';
 import { orphanSkillRule } from './skills/orphan-skill.js';
 import { contradictionKeywordsRule } from './rules-dir/contradiction-keywords.js';
 import { pluginReferenceValidRule } from './plugins/reference-valid.js';
+import { filenameCasingRule } from './naming/filename-casing.js';
 
 export function getAllRules(): LintRule[] {
   return [
@@ -86,5 +87,6 @@ export function getAllRules(): LintRule[] {
     orphanSkillRule,
     contradictionKeywordsRule,
     pluginReferenceValidRule,
+    filenameCasingRule,
   ];
 }

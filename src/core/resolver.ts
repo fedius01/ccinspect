@@ -363,6 +363,35 @@ function resolvePlugins(orderedLayers: LayerEntry[]): ResolvedConfig['plugins'] 
   return { effective, conflicts };
 }
 
+// ------- Empty Config Factory -------
+
+export function createEmptyResolvedConfig(): ResolvedConfig {
+  return {
+    permissions: {
+      effectiveAllow: [],
+      effectiveDeny: [],
+      effectiveAsk: [],
+      conflicts: [],
+      redundancies: [],
+    },
+    environment: { effective: new Map(), shadows: [] },
+    mcpServers: { effective: [], conflicts: [] },
+    model: {
+      effectiveModel: { value: 'unknown', origin: 'none' },
+      subagentModel: null,
+      haikuModel: null,
+      opusModel: null,
+    },
+    sandbox: {
+      enabled: { value: false, origin: 'none' },
+      autoAllowBashIfSandboxed: null,
+      excludedCommands: null,
+      networkConfig: {},
+    },
+    plugins: { effective: [], conflicts: [] },
+  };
+}
+
 // ------- Main Resolve -------
 
 export function resolve(inventory: ConfigInventory, layers?: ParsedConfigLayers): ResolvedConfig {

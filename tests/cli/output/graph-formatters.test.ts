@@ -332,6 +332,6 @@ describe('formatters with graph-complex fixture', () => {
     const output = formatGraphJson(getGraph());
     const parsed = JSON.parse(output) as DependencyGraph;
     const allNodes = [...parsed.nodes, ...parsed.orphans];
-    expect(allNodes.length).toBe(10);
+    expect(allNodes.length).toBe(11);
   });
 });

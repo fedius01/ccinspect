@@ -1,5 +1,5 @@
-import { readFileSync, statSync, readdirSync } from 'fs';
-import { join, relative, resolve, basename } from 'path';
+import { existsSync, readFileSync, statSync, readdirSync } from 'fs';
+import { join, relative, resolve, basename, dirname } from 'path';
 import fg from 'fast-glob';
 
 import type { FileInfo, RuleFileInfo, ConfigInventory, FileScope } from '../types/index.js';
@@ -17,6 +17,34 @@ import {
   getAutoMemoryDir,
   pathExists,
 } from '../utils/os-paths.js';
+
+/**
+ * Find a file by name, falling back to case-insensitive match.
+ * Returns the actual path found (which may differ in casing), or null.
+ */
+function findFileCaseInsensitive(dir: string, exactName: string): string | null {
+  const exactPath = join(dir, exactName);
+  if (existsSync(exactPath)) {
+    // On case-insensitive filesystems (macOS HFS+), existsSync may match
+    // despite casing difference. Use readdirSync to get the true on-disk name.
+    try {
+      const entries = readdirSync(dir);
+      const trueEntry = entries.find(e => e.toLowerCase() === exactName.toLowerCase());
+      return trueEntry ? join(dir, trueEntry) : exactPath;
+    } catch {
+      return exactPath;
+    }
+  }
+
+  // Case-insensitive fallback: read directory entries
+  try {
+    const entries = readdirSync(dir);
+    const match = entries.find(e => e.toLowerCase() === exactName.toLowerCase());
+    return match ? join(dir, match) : null;
+  } catch {
+    return null;
+  }
+}
 
 function buildFileInfo(
   absolutePath: string,
@@ -71,16 +99,7 @@ function buildRuleFileInfo(
   absolutePath: string,
   projectRoot: string,
 ): RuleFileInfo | null {
-  const base = buildFileInfo(absolutePath, 'project-shared', projectRoot);
-  if (!base) return null;
-
-  // Basic frontmatter extraction (will be enhanced by parsers)
-  return {
-    ...base,
-    frontmatter: {},
-    matchedFiles: [],
-    isDead: false,
-  };
+  return buildFileInfo(absolutePath, 'project-shared', projectRoot);
 }
 
 function discoverMdFiles(dirPath: string): string[] {
@@ -97,7 +116,9 @@ function discoverMdFiles(dirPath: string): string[] {
 function discoverSkillFiles(skillsDir: string): string[] {
   if (!pathExists(skillsDir)) return [];
   try {
-    return fg.sync('**/SKILL.md', { cwd: skillsDir, absolute: true });
+    // Case-insensitive: discover all .md files and filter by basename
+    const allMdFiles = fg.sync('**/*.md', { cwd: skillsDir, absolute: true });
+    return allMdFiles.filter(f => basename(f).toLowerCase() === 'skill.md');
   } catch {
     return [];
   }
@@ -105,11 +126,16 @@ function discoverSkillFiles(skillsDir: string): string[] {
 
 function discoverSubdirClaudeMds(projectRoot: string): string[] {
   try {
-    return fg.sync('**/CLAUDE.md', {
+    // Case-insensitive: discover all .md files and filter by basename
+    const allMdFiles = fg.sync('**/*.md', {
       cwd: projectRoot,
       ignore: ['node_modules/**', '.git/**', 'dist/**', 'coverage/**'],
       absolute: true,
-    }).filter((p) => resolve(p) !== resolve(join(projectRoot, 'CLAUDE.md')));
+    });
+    return allMdFiles
+      .filter(p => basename(p).toLowerCase() === 'claude.md')
+      // Exclude the root-level CLAUDE.md (any casing) — it's handled separately
+      .filter((p) => resolve(dirname(p)) !== resolve(projectRoot));
   } catch {
     return [];
   }
@@ -141,15 +167,32 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
 
   // Settings layer
   const userSettings = getFileInfo(getUserSettingsPath(), 'user');
-  const projectSettings = getFileInfo(join(projectRoot, '.claude', 'settings.json'), 'project-shared');
-  const localSettings = getFileInfo(join(projectRoot, '.claude', 'settings.local.json'), 'project-local');
+
+  const projectSettingsActual = findFileCaseInsensitive(join(projectRoot, '.claude'), 'settings.json');
+  const projectSettings = projectSettingsActual
+    ? getFileInfo(projectSettingsActual, 'project-shared')
+    : getFileInfo(join(projectRoot, '.claude', 'settings.json'), 'project-shared');
+
+  const localSettingsActual = findFileCaseInsensitive(join(projectRoot, '.claude'), 'settings.local.json');
+  const localSettings = localSettingsActual
+    ? getFileInfo(localSettingsActual, 'project-local')
+    : getFileInfo(join(projectRoot, '.claude', 'settings.local.json'), 'project-local');
+
   const managedSettings = getFileInfo(getManagedSettingsPath(), 'enterprise');
   const preferences = getFileInfo(getPreferencesPath(), 'user');
 
   // Memory layer
   const globalClaudeMd = getFileInfo(getUserClaudeMdPath(), 'user');
-  const projectClaudeMd = getFileInfo(join(projectRoot, 'CLAUDE.md'), 'project-shared');
-  const localClaudeMd = getFileInfo(join(projectRoot, 'CLAUDE.local.md'), 'project-local');
+
+  const projectClaudeMdActual = findFileCaseInsensitive(projectRoot, 'CLAUDE.md');
+  const projectClaudeMd = projectClaudeMdActual
+    ? getFileInfo(projectClaudeMdActual, 'project-shared')
+    : getFileInfo(join(projectRoot, 'CLAUDE.md'), 'project-shared');
+
+  const localClaudeMdActual = findFileCaseInsensitive(projectRoot, 'CLAUDE.local.md');
+  const localClaudeMd = localClaudeMdActual
+    ? getFileInfo(localClaudeMdActual, 'project-local')
+    : getFileInfo(join(projectRoot, 'CLAUDE.local.md'), 'project-local');
 
   const subdirPaths = discoverSubdirClaudeMds(projectRoot).filter(notExcluded);
   const subdirClaudeMds = subdirPaths
@@ -162,13 +205,13 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   if (gitRoot) {
     const projectId = getProjectIdentifier(gitRoot);
     const memoryDir = getAutoMemoryDir(projectId);
-    const memoryMdPath = join(memoryDir, 'MEMORY.md');
-    autoMemory = getFileInfo(memoryMdPath, 'user');
+    const memoryMdActual = findFileCaseInsensitive(memoryDir, 'MEMORY.md');
+    autoMemory = memoryMdActual
+      ? getFileInfo(memoryMdActual, 'user')
+      : getFileInfo(join(memoryDir, 'MEMORY.md'), 'user');
 
     if (pathExists(memoryDir)) {
-      const topicFiles = discoverMdFiles(memoryDir).filter(
-        (p) => basename(p) !== 'MEMORY.md',
-      );
+      const topicFiles = discoverMdFiles(memoryDir).filter((p) => basename(p).toLowerCase() !== 'memory.md');
       autoMemoryTopics = topicFiles
         .map((p) => buildFileInfo(p, 'user', projectRoot))
         .filter((f): f is FileInfo => f !== null);
@@ -216,7 +259,11 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     .filter((f): f is FileInfo => f !== null);
 
   // MCP
-  const projectMcp = getFileInfo(join(projectRoot, '.mcp.json'), 'project-shared');
+  const projectMcpActual = findFileCaseInsensitive(projectRoot, '.mcp.json');
+  const projectMcp = projectMcpActual
+    ? getFileInfo(projectMcpActual, 'project-shared')
+    : getFileInfo(join(projectRoot, '.mcp.json'), 'project-shared');
+  // managed-mcp.json: enterprise-managed, no case-insensitive fallback
   const managedMcp = getFileInfo(getManagedMcpPath(), 'enterprise');
 
   // Count totals

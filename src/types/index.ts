@@ -36,3 +36,23 @@ export type {
   GraphEdge,
   DependencyGraph,
 } from './graph.js';
+
+import type { FileScope, ConfigInventory as CI } from './inventory.js';
+import type { ResolvedConfig as RC } from './resolved.js';
+
+export type ConfigFileType =
+  | 'claude-md'
+  | 'settings-json'
+  | 'mcp-json'
+  | 'rule-md'
+  | 'agent-md'
+  | 'skill-md'
+  | 'command-md';
+
+export interface SingleFileContext {
+  fileType: ConfigFileType;
+  filePath: string;
+  scope: FileScope;
+  inventory: CI;
+  resolved: RC;
+}

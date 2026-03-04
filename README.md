@@ -10,7 +10,7 @@ Scan · Lint · Resolve · Compare
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-538%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-705%20passing-brightgreen)]()
 
 </div>
 
@@ -33,7 +33,7 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 **ccinspect** fixes that with next capabilities:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
-🧹 **Lint** — runs 42 rules catching security gaps, dead references, conflicts, and bloat
+🧹 **Lint** — runs 43 rules catching security gaps, dead references, conflicts, and bloat
 📋 **Evidence** — see exactly which lines triggered each detection
 🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking
 ⚖️ **Compare** — diffs configurations across projects side-by-side  
@@ -60,11 +60,24 @@ cci lint
 | Command | Description |
 |---------|-------------|
 | `cci scan` | Discover and inventory all config files with sizes, token counts, and git status |
-| `cci lint` | Run 42 rules across 11 categories to find issues |
+| `cci lint [target]` | Run 43 rules — pass a directory or a single config file |
 | `cci resolve` | Show effective config after all layers merge, with origin tracking |
 | `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
 | `cci info` | Show runtime info — CLI version, active model, auth method |
 | `cci session-handover` | Generate status.md from git diff, test results, and typecheck |
+| `cci graph` | Visualize config dependency graph — text, mermaid, HTML, or JSON output |
+
+### Single-file mode
+
+Lint individual config files without scanning an entire project:
+
+```bash
+cci lint CLAUDE.md
+cci lint .claude/settings.json
+cci lint .claude/agents/researcher.md
+```
+
+Supported file types: `CLAUDE.md`, `settings.json`, `.mcp.json`, `.claude/rules/*.md`, `.claude/agents/*.md`, `SKILL.md`, `.claude/commands/*.md`
 
 ## Common flags
 
@@ -89,6 +102,7 @@ cci lint
 | `mcp` | 1 | MCP server environment variable validation |
 | `git` | 1 | Local-only files accidentally tracked in git |
 | `plugins` | 1 | Plugin references point to installed plugins |
+| `naming` | 1 | Config file casing — detects files Claude Code won't recognize |
 
 ## Configuration
 
@@ -146,7 +160,7 @@ src/
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
-tests/        Vitest test suite (538 tests)
+tests/        Vitest test suite (705 tests)
 documentation/         Configuration
 ```
 

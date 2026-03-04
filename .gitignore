@@ -10,3 +10,4 @@ coverage/
 CLAUDE.local.md
 /docs
 /dogfood/**/*.json
+/dogfood/fixtures/

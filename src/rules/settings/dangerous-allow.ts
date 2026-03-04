@@ -38,6 +38,10 @@ function isBarePattern(allowEntry: string, pattern: string): boolean {
   return allowEntry === pattern;
 }
 
+function isWildcardAll(allowEntry: string, toolName: string): boolean {
+  return allowEntry === `${toolName}(*)`;
+}
+
 function isMcpWildcard(allowEntry: string): boolean {
   return allowEntry === 'mcp__*';
 }
@@ -73,7 +77,7 @@ export const dangerousAllowRule: LintRule = {
         for (const entry of allowList) {
           // Check bare dangerous patterns
           for (const dangerous of DANGEROUS_PATTERNS) {
-            if (isBarePattern(entry, dangerous.pattern)) {
+            if (isBarePattern(entry, dangerous.pattern) || isWildcardAll(entry, dangerous.pattern)) {
               issues.push({
                 ruleId: 'settings/dangerous-allow',
                 severity: 'warning',

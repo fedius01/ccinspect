@@ -134,6 +134,31 @@ describe('Scanner', () => {
     });
   });
 
+  describe('miscased-files project', () => {
+    const projectDir = join(FIXTURES, 'miscased-files');
+
+    it('discovers miscased Claude.md as projectClaudeMd', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectClaudeMd).not.toBeNull();
+      expect(inventory.projectClaudeMd?.exists).toBe(true);
+      // The path should reflect the actual on-disk filename
+      expect(inventory.projectClaudeMd?.path).toContain('Claude.md');
+    });
+
+    it('discovers miscased skill.md in projectSkills', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectSkills.length).toBeGreaterThanOrEqual(1);
+      const skillPaths = inventory.projectSkills.map(s => s.path);
+      expect(skillPaths.some(p => p.toLowerCase().includes('skill.md'))).toBe(true);
+    });
+
+    it('discovers correctly-cased settings.json normally', () => {
+      const inventory = scan({ projectDir });
+      expect(inventory.projectSettings).not.toBeNull();
+      expect(inventory.projectSettings?.exists).toBe(true);
+    });
+  });
+
   describe('non-existent project', () => {
     it('handles missing project dir gracefully', () => {
       const projectDir = join(FIXTURES, 'does-not-exist');

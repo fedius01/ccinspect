@@ -64,9 +64,6 @@ function makeRuleFileInfo(filePath: string, relativePath: string): RuleFileInfo 
     estimatedTokens: 0,
     gitTracked: false,
     lastModified: new Date(),
-    frontmatter: {},
-    matchedFiles: [],
-    isDead: false,
   };
 }
 

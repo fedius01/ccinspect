@@ -14,7 +14,8 @@ export type IssueCategory =
   | 'mcp'
   | 'hooks'
   | 'plugins'
-  | 'git';
+  | 'git'
+  | 'naming';
 
 export interface LintEvidence {
   file: string;          // File path where evidence was found

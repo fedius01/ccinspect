@@ -12,14 +12,9 @@ export interface FileInfo {
   lastModified: Date;
 }
 
-export interface RuleFileInfo extends FileInfo {
-  frontmatter: {
-    paths?: string[];
-    description?: string;
-  };
-  matchedFiles: string[];
-  isDead: boolean;
-}
+// Scanner only provides FileInfo metadata for rules.
+// Frontmatter, matchedFiles, and isDead are parser concerns — see ParsedRule in parsers/rules-md.ts.
+export type RuleFileInfo = FileInfo;
 
 export interface HookInfo {
   event: 'PreToolUse' | 'PostToolUse' | 'SessionStart' | 'Stop' | 'UserPromptSubmit';

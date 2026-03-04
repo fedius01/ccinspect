@@ -194,8 +194,21 @@ export function buildDependencyGraph(
         const targetRelPath = relative(projectRoot, imp.resolvedPath);
         // Try to find an existing node for this imported file
         const targetId = findImportTargetNode(targetRelPath) ?? makeNodeId('claude-md', targetRelPath);
-        const isBroken = !nodeMap.has(targetId);
-        addEdge(sourceId, targetId, 'import', isBroken);
+        // resolvedPath being non-null means the parser verified the file exists on disk.
+        // If no node exists yet (e.g. docs/architecture.md — not a config component),
+        // create one so the import edge renders correctly.
+        if (!nodeMap.has(targetId)) {
+          const node: GraphNode = {
+            id: targetId,
+            type: 'claude-md',
+            label: targetRelPath,
+            filePath: imp.resolvedPath,
+            scope: file.scope,
+            tokens: 0,
+          };
+          nodeMap.set(targetId, node);
+        }
+        addEdge(sourceId, targetId, 'import', false);
       } else {
         // Import target doesn't exist — broken reference
         const targetId = makeNodeId('claude-md', imp.path);

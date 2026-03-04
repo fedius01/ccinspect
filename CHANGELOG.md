@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **New lint rule:** `naming/filename-casing` — flags miscased config files (e.g., `Claude.md` instead of `CLAUDE.md`)
+- **New rule category:** `naming` (12 categories total)
+- **Scanner:** case-insensitive file discovery via `findFileCaseInsensitive()` — miscased files are now discovered and linted in directory mode
+- **Single-file lint mode:** `cci lint <file>` validates individual config files without scanning an entire project directory
+- **File type classifier** (`src/utils/file-classifier.ts`) — pure function classification for 7 config file types
+- **Sparse inventory builder** (`src/utils/single-file-inventory.ts`) — builds a minimal `ConfigInventory` for a single file
+
+### Changed
+- `cci lint` now accepts an optional `[target]` positional argument (file path or directory)
+- New `createEmptyResolvedConfig()` export from `src/core/resolver.ts`
+- Removed ad-hoc casing warning from single-file mode — replaced by proper lint rule
+
+### Metrics
+- 644 tests across 60 files (was 538/56)
+- 43 lint rules across 12 categories (was 42/11)
+
 ## [0.3.0] — 2026-03-02
 
 ### Added

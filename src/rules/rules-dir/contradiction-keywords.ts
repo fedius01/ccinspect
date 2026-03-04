@@ -1,5 +1,6 @@
 import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 import { parseRuleMd } from '../../parsers/rules-md.js';
+import { globArraysOverlap } from '../../utils/glob-overlap.js';
 
 /**
  * Tool/technology categories for auto-generating contradiction pairs.
@@ -66,39 +67,6 @@ function hasPhrase(text: string, phrase: string): boolean {
   return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
 }
 
-/**
- * Check if two rules have overlapping globs using segment-based comparison.
- * If either rule has no globs, it applies everywhere — overlaps with everything.
- */
-export function globsOverlap(globsA: string[], globsB: string[]): boolean {
-  if (globsA.length === 0 || globsB.length === 0) return true;
-
-  for (const a of globsA) {
-    for (const b of globsB) {
-      if (a === b) return true;
-
-      // Compare directory segments (not character prefixes)
-      const aSegments = a.replace(/\*.*$/, '').split('/').filter(Boolean);
-      const bSegments = b.replace(/\*.*$/, '').split('/').filter(Boolean);
-
-      // If either has no segments after stripping (e.g., "**"), it's global scope
-      if (aSegments.length === 0 || bSegments.length === 0) return true;
-
-      // Check if one path is a prefix of the other by segments
-      const minLen = Math.min(aSegments.length, bSegments.length);
-      let segmentsMatch = true;
-      for (let k = 0; k < minLen; k++) {
-        if (aSegments[k] !== bSegments[k]) {
-          segmentsMatch = false;
-          break;
-        }
-      }
-      if (segmentsMatch) return true;
-    }
-  }
-  return false;
-}
-
 function findMatchLine(lines: string[], phrase: string): { line: number; content: string } | null {
   for (let i = 0; i < lines.length; i++) {
     if (hasPhrase(lines[i], phrase)) {
@@ -157,7 +125,7 @@ export const contradictionKeywordsRule: LintRule = {
         const ruleB = parsedRules[j];
 
         // Only compare rules with overlapping globs
-        if (!globsOverlap(ruleA.globs, ruleB.globs)) continue;
+        if (!globArraysOverlap(ruleA.globs, ruleB.globs)) continue;
 
         for (const [phraseA, phraseB, category] of CONTRADICTION_PAIRS) {
           // Check both directions

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import {
   contradictionKeywordsRule,
-  globsOverlap,
   generateCategoryPairs,
 } from '../../src/rules/rules-dir/contradiction-keywords.js';
+import { globArraysOverlap } from '../../src/utils/glob-overlap.js';
 import { resolve } from '../../src/core/resolver.js';
 import type { ConfigInventory, RuleFileInfo } from '../../src/types/index.js';
 
@@ -53,9 +53,7 @@ function makeRuleFileInfo(overrides: Partial<RuleFileInfo> = {}): RuleFileInfo {
     estimatedTokens: 50,
     gitTracked: true,
     lastModified: new Date(),
-    frontmatter: {},
-    matchedFiles: [],
-    isDead: false,
+
     ...overrides,
   };
 }
@@ -306,40 +304,40 @@ describe('rules-dir/contradiction-keywords rule', () => {
   });
 });
 
-describe('globsOverlap()', () => {
+describe('globArraysOverlap()', () => {
   it('returns false for backend/** and frontend/**', () => {
-    expect(globsOverlap(['backend/**'], ['frontend/**'])).toBe(false);
+    expect(globArraysOverlap(['backend/**'], ['frontend/**'])).toBe(false);
   });
 
   it('returns false for src/backend/** and src/frontend/**', () => {
-    expect(globsOverlap(['src/backend/**'], ['src/frontend/**'])).toBe(false);
+    expect(globArraysOverlap(['src/backend/**'], ['src/frontend/**'])).toBe(false);
   });
 
   it('returns true for src/** and src/utils/**', () => {
-    expect(globsOverlap(['src/**'], ['src/utils/**'])).toBe(true);
+    expect(globArraysOverlap(['src/**'], ['src/utils/**'])).toBe(true);
   });
 
   it('returns true for ** and anything', () => {
-    expect(globsOverlap(['**'], ['src/utils/**'])).toBe(true);
-    expect(globsOverlap(['src/**'], ['**'])).toBe(true);
+    expect(globArraysOverlap(['**'], ['src/utils/**'])).toBe(true);
+    expect(globArraysOverlap(['src/**'], ['**'])).toBe(true);
   });
 
   it('returns true for identical globs', () => {
-    expect(globsOverlap(['src/**/*.ts'], ['src/**/*.ts'])).toBe(true);
+    expect(globArraysOverlap(['src/**/*.ts'], ['src/**/*.ts'])).toBe(true);
   });
 
   it('returns true when either side has no globs (empty array)', () => {
-    expect(globsOverlap([], ['src/**'])).toBe(true);
-    expect(globsOverlap(['src/**'], [])).toBe(true);
-    expect(globsOverlap([], [])).toBe(true);
+    expect(globArraysOverlap([], ['src/**'])).toBe(true);
+    expect(globArraysOverlap(['src/**'], [])).toBe(true);
+    expect(globArraysOverlap([], [])).toBe(true);
   });
 
   it('returns true when one is a segment prefix of the other', () => {
-    expect(globsOverlap(['src/**'], ['src/components/**'])).toBe(true);
+    expect(globArraysOverlap(['src/**'], ['src/components/**'])).toBe(true);
   });
 
   it('returns false for completely disjoint paths', () => {
-    expect(globsOverlap(['lib/**'], ['test/**'])).toBe(false);
+    expect(globArraysOverlap(['lib/**'], ['test/**'])).toBe(false);
   });
 });
 

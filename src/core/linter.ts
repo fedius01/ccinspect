@@ -1,4 +1,5 @@
-import type { ConfigInventory, ResolvedConfig, LintRule, LintIssue, LintResult, LintConfig, Severity } from '../types/index.js';
+import type { ConfigInventory, ResolvedConfig, LintRule, LintIssue, LintResult, LintConfig, Severity, ConfigFileType } from '../types/index.js';
+import { SINGLE_FILE_CATEGORIES } from '../utils/file-classifier.js';
 
 export class Linter {
   private rules: LintRule[] = [];
@@ -17,12 +18,19 @@ export class Linter {
     inventory: ConfigInventory,
     resolved: ResolvedConfig,
     config?: LintConfig,
+    fileType?: ConfigFileType,
   ): LintResult {
     const start = Date.now();
     const issues: LintIssue[] = [];
     let rulesRun = 0;
 
+    // In single-file mode, only run rules whose category matches the file type
+    const allowedCategories = fileType ? new Set(SINGLE_FILE_CATEGORIES[fileType]) : null;
+
     for (const rule of this.rules) {
+      // Skip rules outside the allowed categories in single-file mode
+      if (allowedCategories && !allowedCategories.has(rule.category)) continue;
+
       // Check if rule is disabled in config
       let ruleOptions: Record<string, unknown> | undefined;
       if (config?.rules) {
