@@ -10,10 +10,12 @@ export function registerScanCommand(program: Command): void {
   program
     .command('scan')
     .description('Discover all Claude Code configuration files and show inventory')
+    .option('--all', 'Include config files that don\'t exist yet')
     .action((_options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const projectDir = globalOpts.projectDir as string | undefined;
       const format = globalOpts.format as string | undefined;
+      const all = _options.all as boolean | undefined;
 
       const resolvedProjectDir = resolvePath(projectDir || process.cwd());
 
@@ -26,7 +28,7 @@ export function registerScanCommand(program: Command): void {
         cliPatterns: globalOpts.exclude ?? [],
       });
 
-      const inventory = scan({ projectDir, excluder });
+      const inventory = scan({ projectDir, excluder, includeNonExistent: all ?? false });
 
       if (format === 'json') {
         printInventoryJson(inventory);

@@ -44,6 +44,7 @@ export interface ConfigInventory {
   preferences: FileInfo | null;
 
   // Memory layer
+  enterpriseClaudeMd: FileInfo | null;
   globalClaudeMd: FileInfo | null;
   projectClaudeMd: FileInfo | null;
   localClaudeMd: FileInfo | null;
@@ -53,11 +54,13 @@ export interface ConfigInventory {
 
   // Rules & agents & commands & skills
   rules: RuleFileInfo[];
+  userRules: RuleFileInfo[];
   projectAgents: FileInfo[];
   userAgents: FileInfo[];
   projectCommands: FileInfo[];
   userCommands: FileInfo[];
   projectSkills: FileInfo[];
+  userSkills: FileInfo[];
 
   // MCP
   projectMcp: FileInfo | null;

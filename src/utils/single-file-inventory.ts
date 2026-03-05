@@ -64,6 +64,7 @@ function createEmptyInventory(projectRoot: string, gitRoot: string | null): Conf
     localSettings: null,
     managedSettings: null,
     preferences: null,
+    enterpriseClaudeMd: null,
     globalClaudeMd: null,
     projectClaudeMd: null,
     localClaudeMd: null,
@@ -71,11 +72,13 @@ function createEmptyInventory(projectRoot: string, gitRoot: string | null): Conf
     autoMemory: null,
     autoMemoryTopics: [],
     rules: [],
+    userRules: [],
     projectAgents: [],
     userAgents: [],
     projectCommands: [],
     userCommands: [],
     projectSkills: [],
+    userSkills: [],
     projectMcp: null,
     managedMcp: null,
     plugins: [],
@@ -99,7 +102,9 @@ function placeFileInInventory(
 
   switch (fileType) {
     case 'claude-md':
-      if (scope === 'user') {
+      if (scope === 'enterprise') {
+        inventory.enterpriseClaudeMd = fileInfo;
+      } else if (scope === 'user') {
         inventory.globalClaudeMd = fileInfo;
       } else if (nameLower === 'claude.local.md') {
         inventory.localClaudeMd = fileInfo;
@@ -129,7 +134,11 @@ function placeFileInInventory(
       break;
 
     case 'rule-md':
-      inventory.rules.push(fileInfo);
+      if (scope === 'user') {
+        inventory.userRules.push(fileInfo);
+      } else {
+        inventory.rules.push(fileInfo);
+      }
       break;
 
     case 'agent-md':
@@ -141,7 +150,11 @@ function placeFileInInventory(
       break;
 
     case 'skill-md':
-      inventory.projectSkills.push(fileInfo);
+      if (scope === 'user') {
+        inventory.userSkills.push(fileInfo);
+      } else {
+        inventory.projectSkills.push(fileInfo);
+      }
       break;
 
     case 'command-md':

@@ -1,5 +1,6 @@
+import { basename, dirname } from 'path';
 import chalk from 'chalk';
-import type { FileInfo, ConfigInventory, LintResult, ResolvedConfig } from '../../types/index.js';
+import type { FileInfo, FileScope, ConfigInventory, LintResult, ResolvedConfig } from '../../types/index.js';
 import type { RuntimeInfo } from '../../types/runtime.js';
 import type { ProjectComparison } from '../commands/compare.js';
 
@@ -16,6 +17,12 @@ function stripAnsi(str: string): number {
 function padEnd(str: string, width: number): string {
   const visible = stripAnsi(str);
   return visible >= width ? str : str + ' '.repeat(width - visible);
+}
+
+/** Pad a string that may contain ANSI codes to a visible width (right-align). */
+function padStartAnsi(str: string, width: number): string {
+  const visible = stripAnsi(str);
+  return visible >= width ? str : ' '.repeat(width - visible) + str;
 }
 
 // ---- Formatting helpers ----
@@ -40,18 +47,23 @@ function fileStatusIcon(file: FileInfo | null): string {
   return chalk.yellow('\u25cb');
 }
 
+function scopeDisplayName(scope: string): string {
+  return scope === 'user' ? 'global' : scope;
+}
+
 function scopeColor(scope: string): string {
+  const display = scopeDisplayName(scope);
   switch (scope) {
     case 'enterprise':
-      return chalk.red(scope);
+      return chalk.red(display);
     case 'user':
-      return chalk.blue(scope);
+      return chalk.blue(display);
     case 'project-shared':
-      return chalk.green(scope);
+      return chalk.green(display);
     case 'project-local':
-      return chalk.yellow(scope);
+      return chalk.yellow(display);
     default:
-      return scope;
+      return display;
   }
 }
 
@@ -70,15 +82,41 @@ function severityIcon(severity: string): string {
 
 // ---- Inventory table (scan) ----
 
+const WARN_LINES = 500;
+const WARN_TOKENS = 1000;
+
+/**
+ * Returns a display label for a file path.
+ * Project-relative paths take priority (most files live under ~/, so checking
+ * home first would incorrectly prefix everything with ~/).
+ * Files outside the project but under home get ~/... prefix.
+ * Everything else falls back to the absolute path.
+ */
+function fileDisplayLabel(file: FileInfo, projectRoot: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  // Project-relative takes priority — covers all files inside the project tree
+  if (file.path.startsWith(projectRoot + '/') || file.path === projectRoot) {
+    return file.relativePath;
+  }
+  // Outside project root — use ~/... for home-dir files
+  if (home && file.path.startsWith(home + '/')) {
+    return '~/' + file.path.slice(home.length + 1);
+  }
+  // Fallback — absolute path for anything else (e.g. enterprise paths)
+  return file.path;
+}
+
 interface InventoryRow {
   icon: string;
   file: string;
-  exists: string;
   scope: string;
   size: string;
   lines: string;
   tokens: string;
+  rawLines?: number;
+  rawTokens?: number;
   section?: string; // section header to print before this row group
+  dimmed?: boolean;
 }
 
 function buildFileRow(label: string, file: FileInfo | null): InventoryRow | null {
@@ -87,17 +125,17 @@ function buildFileRow(label: string, file: FileInfo | null): InventoryRow | null
   return {
     icon: fileStatusIcon(file),
     file: label,
-    exists: file.exists ? 'YES' : 'no',
     scope: file.scope,
     size: file.exists ? formatSize(file.sizeBytes) : '-',
     lines: file.exists ? String(file.lineCount) : '-',
     tokens: file.exists ? formatTokens(file.estimatedTokens) : '-',
+    rawLines: file.exists ? file.lineCount : undefined,
+    rawTokens: file.exists ? file.estimatedTokens : undefined,
   };
 }
 
 interface ColWidths {
   file: number;
-  exists: number;
   scope: number;
   size: number;
   lines: number;
@@ -106,14 +144,12 @@ interface ColWidths {
 
 function calcColWidths(rows: InventoryRow[]): ColWidths {
   const MIN_FILE = 4;   // "File"
-  const MIN_EXISTS = 6;  // "Exists"
   const MIN_SCOPE = 5;   // "Scope"
   const MIN_SIZE = 4;    // "Size"
   const MIN_LINES = 5;   // "Lines"
   const MIN_TOKENS = 6;  // "Tokens"
 
   let file = MIN_FILE;
-  let exists = MIN_EXISTS;
   let scope = MIN_SCOPE;
   let size = MIN_SIZE;
   let lines = MIN_LINES;
@@ -121,45 +157,47 @@ function calcColWidths(rows: InventoryRow[]): ColWidths {
 
   for (const r of rows) {
     file = Math.max(file, r.file.length);
-    exists = Math.max(exists, r.exists.length);
-    scope = Math.max(scope, r.scope.length);
+    scope = Math.max(scope, scopeDisplayName(r.scope).length);
     size = Math.max(size, r.size.length);
     lines = Math.max(lines, r.lines.length);
     tokens = Math.max(tokens, r.tokens.length);
   }
 
-  return { file, exists, scope, size, lines, tokens };
+  return { file, scope, size, lines, tokens };
 }
 
 function formatInventoryRow(row: InventoryRow, w: ColWidths): string {
   const icon = padEnd(row.icon, 1);
   const file = row.file.padEnd(w.file);
-  const exists = row.exists === 'YES'
-    ? padEnd(chalk.green(row.exists), w.exists)
-    : padEnd(chalk.gray(row.exists), w.exists);
   const scope = padEnd(scopeColor(row.scope), w.scope);
   const size = row.size.padStart(w.size);
-  const lines = row.lines.padStart(w.lines);
-  const tokens = row.tokens.padStart(w.tokens);
 
-  return `  ${icon}  ${file}  ${exists}  ${scope}  ${size}  ${lines}  ${tokens}`;
+  const linesStr = row.rawLines !== undefined && row.rawLines > WARN_LINES
+    ? padStartAnsi(chalk.yellow(row.lines), w.lines)
+    : row.lines.padStart(w.lines);
+
+  const tokensStr = row.rawTokens !== undefined && row.rawTokens > WARN_TOKENS
+    ? padStartAnsi(chalk.yellow(row.tokens), w.tokens)
+    : row.tokens.padStart(w.tokens);
+
+  const result = `  ${icon}  ${file}  ${scope}  ${size}  ${linesStr}  ${tokensStr}`;
+  return row.dimmed ? chalk.gray(result) : result;
 }
 
 function formatInventoryHeader(w: ColWidths): string {
   const icon = ' ';
   const file = 'File'.padEnd(w.file);
-  const exists = 'Exists'.padEnd(w.exists);
   const scope = 'Scope'.padEnd(w.scope);
   const size = 'Size'.padStart(w.size);
   const lines = 'Lines'.padStart(w.lines);
   const tokens = 'Tokens'.padStart(w.tokens);
 
-  return `  ${icon}  ${file}  ${exists}  ${scope}  ${size}  ${lines}  ${tokens}`;
+  return `  ${icon}  ${file}  ${scope}  ${size}  ${lines}  ${tokens}`;
 }
 
 function totalTableWidth(w: ColWidths): number {
-  // 2 (leading) + 1 (icon) + 2 (gap) + file + 2 + exists + 2 + scope + 2 + size + 2 + lines + 2 + tokens
-  return 2 + 1 + 2 + w.file + 2 + w.exists + 2 + w.scope + 2 + w.size + 2 + w.lines + 2 + w.tokens;
+  // 2 (leading) + 1 (icon) + 2 (gap) + file + 2 + scope + 2 + size + 2 + lines + 2 + tokens
+  return 2 + 1 + 2 + w.file + 2 + w.scope + 2 + w.size + 2 + w.lines + 2 + w.tokens;
 }
 
 export function printInventory(inventory: ConfigInventory): void {
@@ -172,75 +210,149 @@ export function printInventory(inventory: ConfigInventory): void {
     if (row) sec.rows.push(row);
   }
 
+  function buildMissingRow(label: string, scope: FileScope): InventoryRow {
+    return {
+      icon: chalk.gray('-'),
+      file: label,
+      scope,
+      size: '-',
+      lines: '-',
+      tokens: '-',
+    };
+  }
+
+  function pushSettingsRow(label: string, file: FileInfo | null, scope: FileScope, sec: Section): void {
+    const row = file ? buildFileRow(label, file) : buildMissingRow(label, scope);
+    if (row) sec.rows.push(row);
+  }
+
+  // Returns the set of basenames (lowercase, no extension) from `lower` that also exist in `higher`
+  function shadowedNames(higher: FileInfo[], lower: FileInfo[]): Set<string> {
+    const higherNames = new Set(higher.map(f => basename(f.path, '.md').toLowerCase()));
+    return new Set(lower.map(f => basename(f.path, '.md').toLowerCase()).filter(n => higherNames.has(n)));
+  }
+
+  // For skills: name comes from parent directory, not filename (all are SKILL.md)
+  function shadowedSkillNames(higher: FileInfo[], lower: FileInfo[]): Set<string> {
+    const higherNames = new Set(higher.map(f => basename(dirname(f.path)).toLowerCase()));
+    return new Set(lower.map(f => basename(dirname(f.path)).toLowerCase()).filter(n => higherNames.has(n)));
+  }
+
   // Settings
-  const settingsSection: Section = { title: 'Settings', rows: [] };
-  pushRow('~/.claude/settings.json', inventory.userSettings, settingsSection);
-  pushRow('.claude/settings.json', inventory.projectSettings, settingsSection);
-  pushRow('.claude/settings.local.json', inventory.localSettings, settingsSection);
-  pushRow('managed-settings.json', inventory.managedSettings, settingsSection);
-  pushRow('~/.claude.json', inventory.preferences, settingsSection);
+  const settingsSection: Section = {
+    title: 'Settings',
+    rows: [],
+  };
+  pushSettingsRow('managed-settings.json', inventory.managedSettings, 'enterprise', settingsSection);
+  pushSettingsRow('.claude/settings.local.json', inventory.localSettings, 'project-local', settingsSection);
+  pushSettingsRow('.claude/settings.json', inventory.projectSettings, 'project-shared', settingsSection);
+  pushSettingsRow('~/.claude/settings.json', inventory.userSettings, 'user', settingsSection);
+  pushSettingsRow('~/.claude.json', inventory.preferences, 'user', settingsSection);
   if (settingsSection.rows.length > 0) sections.push(settingsSection);
 
   // Memory
   const memorySection: Section = { title: 'Memory (CLAUDE.md)', rows: [] };
+  pushRow('Enterprise CLAUDE.md', inventory.enterpriseClaudeMd, memorySection);
   pushRow('~/.claude/CLAUDE.md', inventory.globalClaudeMd, memorySection);
   pushRow('CLAUDE.md', inventory.projectClaudeMd, memorySection);
   pushRow('CLAUDE.local.md', inventory.localClaudeMd, memorySection);
   for (const subdir of inventory.subdirClaudeMds) {
-    pushRow(subdir.relativePath, subdir, memorySection);
+    pushRow(fileDisplayLabel(subdir, inventory.projectRoot), subdir, memorySection);
   }
   pushRow('MEMORY.md (auto)', inventory.autoMemory, memorySection);
   for (const topic of inventory.autoMemoryTopics) {
-    pushRow(`  ${topic.relativePath}`, topic, memorySection);
+    pushRow(`  ${fileDisplayLabel(topic, inventory.projectRoot)}`, topic, memorySection);
   }
   if (memorySection.rows.length > 0) sections.push(memorySection);
 
   // Rules
-  if (inventory.rules.length > 0) {
+  if (inventory.rules.length > 0 || inventory.userRules.length > 0) {
     const rulesSection: Section = { title: 'Rules', rows: [] };
     for (const rule of inventory.rules) {
-      pushRow(rule.relativePath, rule, rulesSection);
+      pushRow(fileDisplayLabel(rule, inventory.projectRoot), rule, rulesSection);
+    }
+    for (const rule of inventory.userRules) {
+      pushRow(fileDisplayLabel(rule, inventory.projectRoot), rule, rulesSection);
     }
     sections.push(rulesSection);
   }
 
-  // Agents
+  // Agents — project wins over user
   if (inventory.projectAgents.length > 0 || inventory.userAgents.length > 0) {
-    const agentsSection: Section = { title: 'Agents', rows: [] };
+    const shadowedAgents = shadowedNames(inventory.projectAgents, inventory.userAgents);
+    const agentsSection: Section = {
+      title: 'Agents',
+      rows: [],
+    };
     for (const agent of inventory.projectAgents) {
-      pushRow(agent.relativePath, agent, agentsSection);
+      pushRow(fileDisplayLabel(agent, inventory.projectRoot), agent, agentsSection);
     }
     for (const agent of inventory.userAgents) {
-      pushRow(agent.relativePath, agent, agentsSection);
+      const label = fileDisplayLabel(agent, inventory.projectRoot);
+      const name = basename(agent.path, '.md').toLowerCase();
+      const isDimmed = shadowedAgents.has(name);
+      const row = buildFileRow(isDimmed ? `${label}  (inactive)` : label, agent);
+      if (row) {
+        if (isDimmed) row.dimmed = true;
+        agentsSection.rows.push(row);
+      }
     }
     sections.push(agentsSection);
   }
 
-  // Commands
+  // Commands — project wins over user
   if (inventory.projectCommands.length > 0 || inventory.userCommands.length > 0) {
-    const commandsSection: Section = { title: 'Commands', rows: [] };
+    const shadowedCmds = shadowedNames(inventory.projectCommands, inventory.userCommands);
+    const commandsSection: Section = {
+      title: 'Commands',
+      rows: [],
+    };
     for (const cmd of inventory.projectCommands) {
-      pushRow(cmd.relativePath, cmd, commandsSection);
+      pushRow(fileDisplayLabel(cmd, inventory.projectRoot), cmd, commandsSection);
     }
     for (const cmd of inventory.userCommands) {
-      pushRow(cmd.relativePath, cmd, commandsSection);
+      const label = fileDisplayLabel(cmd, inventory.projectRoot);
+      const name = basename(cmd.path, '.md').toLowerCase();
+      const isDimmed = shadowedCmds.has(name);
+      const row = buildFileRow(isDimmed ? `${label}  (inactive)` : label, cmd);
+      if (row) {
+        if (isDimmed) row.dimmed = true;
+        commandsSection.rows.push(row);
+      }
     }
     sections.push(commandsSection);
   }
 
-  // Skills
-  if (inventory.projectSkills.length > 0) {
-    const skillsSection: Section = { title: 'Skills', rows: [] };
+  // Skills — user wins over project
+  if (inventory.projectSkills.length > 0 || inventory.userSkills.length > 0) {
+    const shadowedSkills = shadowedSkillNames(inventory.userSkills, inventory.projectSkills);
+    const skillsSection: Section = {
+      title: 'Skills',
+      rows: [],
+    };
+    for (const skill of inventory.userSkills) {
+      pushRow(fileDisplayLabel(skill, inventory.projectRoot), skill, skillsSection);
+    }
     for (const skill of inventory.projectSkills) {
-      pushRow(skill.relativePath, skill, skillsSection);
+      const label = fileDisplayLabel(skill, inventory.projectRoot);
+      const name = basename(dirname(skill.path)).toLowerCase();
+      const isDimmed = shadowedSkills.has(name);
+      const row = buildFileRow(isDimmed ? `${label}  (inactive)` : label, skill);
+      if (row) {
+        if (isDimmed) row.dimmed = true;
+        skillsSection.rows.push(row);
+      }
     }
     sections.push(skillsSection);
   }
 
   // MCP
-  const mcpSection: Section = { title: 'MCP', rows: [] };
-  pushRow('.mcp.json', inventory.projectMcp, mcpSection);
+  const mcpSection: Section = {
+    title: 'MCP',
+    rows: [],
+  };
   pushRow('managed-mcp.json', inventory.managedMcp, mcpSection);
+  pushRow('.mcp.json', inventory.projectMcp, mcpSection);
   if (mcpSection.rows.length > 0) sections.push(mcpSection);
 
   // 2. Calculate widths from ALL rows
@@ -276,8 +388,29 @@ export function printInventory(inventory: ConfigInventory): void {
   console.log(
     `  Startup tokens: ${chalk.cyan(formatTokens(inventory.totalStartupTokens))} | On-demand tokens: ${chalk.cyan(formatTokens(inventory.totalOnDemandTokens))}`,
   );
+
+  // Precedence block
   console.log();
-  console.log(chalk.gray(`Legend: ${chalk.green('\u2713')} git-tracked  ${chalk.yellow('\u25cb')} untracked/gitignored  ${chalk.gray('-')} not found`));
+  console.log(chalk.bold('Precedence & merge behavior:'));
+  const precedenceRows: Array<[string, string, string]> = [
+    ['Settings',  'enterprise \u2192 project-local \u2192 project-shared \u2192 global', '\u00b7 arrays merge, scalars override'],
+    ['Memory',    'enterprise \u2192 global \u2192 project-shared \u2192 project-local', '\u00b7 additive, specific wins on conflict'],
+    ['Rules',     'global + project-shared',                              '\u00b7 additive'],
+    ['Agents',    'enterprise \u2192 project-shared \u2192 global',                 '\u00b7 override by name'],
+    ['Skills',    'enterprise \u2192 global \u2192 project-shared',                 '\u00b7 override by name'],
+    ['Commands',  'project-shared \u2192 global',                              '\u00b7 override by name'],
+    ['MCP',       'managed \u2192 project-shared \u2192 global',                    '\u00b7 override by name'],
+  ];
+  const labelW = Math.max(...precedenceRows.map(([l]) => l.length));
+  const orderW = Math.max(...precedenceRows.map(([, o]) => o.length));
+  for (const [label, order, behavior] of precedenceRows) {
+    console.log(
+      `  ${chalk.bold(label.padEnd(labelW))}  ${chalk.gray(order.padEnd(orderW))}  ${chalk.gray(behavior)}`,
+    );
+  }
+
+  console.log();
+  console.log(chalk.gray(`Legend: ${chalk.green('\u2713')} git-tracked  ${chalk.yellow('\u25cb')} untracked/gitignored  ${chalk.gray('-')} not found  |  global = ~/.claude/  |  (inactive) = shadowed by higher-priority file`));
   console.log();
 }
 

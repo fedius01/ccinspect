@@ -14,6 +14,9 @@ import {
   getManagedMcpPath,
   getUserAgentsDir,
   getUserCommandsDir,
+  getUserRulesDir,
+  getUserSkillsDir,
+  getEnterpriseClaudeMdPath,
   getAutoMemoryDir,
   pathExists,
 } from '../utils/os-paths.js';
@@ -145,6 +148,7 @@ interface ScanOptions {
   projectDir?: string;
   includeNonExistent?: boolean;
   excluder?: Excluder;
+  skipGlobalDirs?: boolean;
 }
 
 export function scan(options: ScanOptions = {}): ConfigInventory {
@@ -153,6 +157,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
 
   const includeNonExistent = options.includeNonExistent ?? true;
   const excluder = options.excluder;
+  const skipGlobal = options.skipGlobalDirs ?? false;
 
   // Helper to filter out excluded paths
   const notExcluded = (p: string): boolean => !excluder || !excluder.isExcluded(p);
@@ -166,7 +171,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   }
 
   // Settings layer
-  const userSettings = getFileInfo(getUserSettingsPath(), 'user');
+  const userSettings = skipGlobal ? null : getFileInfo(getUserSettingsPath(), 'user');
 
   const projectSettingsActual = findFileCaseInsensitive(join(projectRoot, '.claude'), 'settings.json');
   const projectSettings = projectSettingsActual
@@ -178,11 +183,12 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     ? getFileInfo(localSettingsActual, 'project-local')
     : getFileInfo(join(projectRoot, '.claude', 'settings.local.json'), 'project-local');
 
-  const managedSettings = getFileInfo(getManagedSettingsPath(), 'enterprise');
-  const preferences = getFileInfo(getPreferencesPath(), 'user');
+  const managedSettings = skipGlobal ? null : getFileInfo(getManagedSettingsPath(), 'enterprise');
+  const preferences = skipGlobal ? null : getFileInfo(getPreferencesPath(), 'user');
 
   // Memory layer
-  const globalClaudeMd = getFileInfo(getUserClaudeMdPath(), 'user');
+  const enterpriseClaudeMd = skipGlobal ? null : getFileInfo(getEnterpriseClaudeMdPath(), 'enterprise');
+  const globalClaudeMd = skipGlobal ? null : getFileInfo(getUserClaudeMdPath(), 'user');
 
   const projectClaudeMdActual = findFileCaseInsensitive(projectRoot, 'CLAUDE.md');
   const projectClaudeMd = projectClaudeMdActual
@@ -202,7 +208,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   // Auto memory
   let autoMemory: FileInfo | null = null;
   let autoMemoryTopics: FileInfo[] = [];
-  if (gitRoot) {
+  if (gitRoot && !skipGlobal) {
     const projectId = getProjectIdentifier(gitRoot);
     const memoryDir = getAutoMemoryDir(projectId);
     const memoryMdActual = findFileCaseInsensitive(memoryDir, 'MEMORY.md');
@@ -225,6 +231,15 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     .map((p) => buildRuleFileInfo(p, projectRoot))
     .filter((f): f is RuleFileInfo => f !== null);
 
+  // User rules
+  const userRules: RuleFileInfo[] = skipGlobal ? [] : (() => {
+    const userRulesDir = getUserRulesDir();
+    const userRuleFiles = discoverMdFiles(userRulesDir);
+    return userRuleFiles
+      .map((p) => buildFileInfo(p, 'user', projectRoot))
+      .filter((f): f is RuleFileInfo => f !== null);
+  })();
+
   // Agents
   const projectAgentsDir = join(projectRoot, '.claude', 'agents');
   const projectAgentFiles = discoverMdFiles(projectAgentsDir).filter(notExcluded);
@@ -232,11 +247,12 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
 
-  const userAgentsDir = getUserAgentsDir();
-  const userAgentFiles = discoverMdFiles(userAgentsDir);
-  const userAgents = userAgentFiles
-    .map((p) => buildFileInfo(p, 'user', projectRoot))
-    .filter((f): f is FileInfo => f !== null);
+  const userAgents: FileInfo[] = skipGlobal ? [] : (() => {
+    const userAgentFiles = discoverMdFiles(getUserAgentsDir());
+    return userAgentFiles
+      .map((p) => buildFileInfo(p, 'user', projectRoot))
+      .filter((f): f is FileInfo => f !== null);
+  })();
 
   // Commands
   const projectCommandsDir = join(projectRoot, '.claude', 'commands');
@@ -245,11 +261,12 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
 
-  const userCommandsDir = getUserCommandsDir();
-  const userCommandFiles = discoverMdFiles(userCommandsDir);
-  const userCommands = userCommandFiles
-    .map((p) => buildFileInfo(p, 'user', projectRoot))
-    .filter((f): f is FileInfo => f !== null);
+  const userCommands: FileInfo[] = skipGlobal ? [] : (() => {
+    const userCommandFiles = discoverMdFiles(getUserCommandsDir());
+    return userCommandFiles
+      .map((p) => buildFileInfo(p, 'user', projectRoot))
+      .filter((f): f is FileInfo => f !== null);
+  })();
 
   // Skills
   const projectSkillsDir = join(projectRoot, '.claude', 'skills');
@@ -258,13 +275,21 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     .map((p) => buildFileInfo(p, 'project-shared', projectRoot))
     .filter((f): f is FileInfo => f !== null);
 
+  // User skills
+  const userSkills: FileInfo[] = skipGlobal ? [] : (() => {
+    const userSkillFiles = discoverSkillFiles(getUserSkillsDir());
+    return userSkillFiles
+      .map((p) => buildFileInfo(p, 'user', projectRoot))
+      .filter((f): f is FileInfo => f !== null);
+  })();
+
   // MCP
   const projectMcpActual = findFileCaseInsensitive(projectRoot, '.mcp.json');
   const projectMcp = projectMcpActual
     ? getFileInfo(projectMcpActual, 'project-shared')
     : getFileInfo(join(projectRoot, '.mcp.json'), 'project-shared');
   // managed-mcp.json: enterprise-managed, no case-insensitive fallback
-  const managedMcp = getFileInfo(getManagedMcpPath(), 'enterprise');
+  const managedMcp = skipGlobal ? null : getFileInfo(getManagedMcpPath(), 'enterprise');
 
   // Count totals
   const allFiles: (FileInfo | null)[] = [
@@ -273,6 +298,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     localSettings,
     managedSettings,
     preferences,
+    enterpriseClaudeMd,
     globalClaudeMd,
     projectClaudeMd,
     localClaudeMd,
@@ -282,18 +308,20 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     ...subdirClaudeMds,
     ...autoMemoryTopics,
     ...rules,
+    ...userRules,
     ...projectAgents,
     ...userAgents,
     ...projectCommands,
     ...userCommands,
     ...projectSkills,
+    ...userSkills,
   ];
 
   const existingFiles = allFiles.filter((f): f is FileInfo => f !== null && f.exists);
   const totalFiles = existingFiles.length;
 
   // Startup tokens: CLAUDE.md chain + MEMORY.md (first 200 lines)
-  const startupFiles = [globalClaudeMd, projectClaudeMd, localClaudeMd].filter(
+  const startupFiles = [enterpriseClaudeMd, globalClaudeMd, projectClaudeMd, localClaudeMd].filter(
     (f): f is FileInfo => f !== null && f.exists,
   );
   let totalStartupTokens = startupFiles.reduce((sum, f) => sum + f.estimatedTokens, 0);
@@ -310,7 +338,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
   }
 
   // On-demand tokens: subdir CLAUDE.md + rules + memory topics
-  const onDemandFiles = [...subdirClaudeMds, ...rules, ...autoMemoryTopics];
+  const onDemandFiles = [...subdirClaudeMds, ...rules, ...userRules, ...autoMemoryTopics];
   const totalOnDemandTokens = onDemandFiles
     .filter((f) => f.exists)
     .reduce((sum, f) => sum + f.estimatedTokens, 0);
@@ -323,6 +351,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     localSettings,
     managedSettings,
     preferences,
+    enterpriseClaudeMd,
     globalClaudeMd,
     projectClaudeMd,
     localClaudeMd,
@@ -330,11 +359,13 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     autoMemory,
     autoMemoryTopics,
     rules,
+    userRules,
     projectAgents,
     userAgents,
     projectCommands,
     userCommands,
     projectSkills,
+    userSkills,
     projectMcp,
     managedMcp,
     plugins: [],

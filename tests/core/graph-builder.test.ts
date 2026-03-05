@@ -14,7 +14,7 @@ describe('Graph Builder', () => {
     // Build graph once for all tests in this describe block
     function getGraph(): DependencyGraph {
       if (!graph) {
-        const inventory = scan({ projectDir });
+        const inventory = scan({ projectDir, skipGlobalDirs: true });
         graph = buildDependencyGraph(inventory, projectDir);
       }
       return graph;
@@ -241,7 +241,7 @@ describe('Graph Builder', () => {
     const projectDir = join(FIXTURES, 'graph-broken-refs');
 
     it('creates broken edge for agent referencing non-existent skill', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       const brokenSkillRef = graph.edges.find(
@@ -251,7 +251,7 @@ describe('Graph Builder', () => {
     });
 
     it('creates broken edge for agent delegating to non-existent agent', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       const brokenDelegation = graph.edges.find(
@@ -261,7 +261,7 @@ describe('Graph Builder', () => {
     });
 
     it('creates broken edge for CLAUDE.md @import to missing file', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       const brokenImport = graph.edges.find(
@@ -275,7 +275,7 @@ describe('Graph Builder', () => {
     const projectDir = join(FIXTURES, 'minimal-project');
 
     it('produces graph with CLAUDE.md node only', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       const allNodes = [...graph.nodes, ...graph.orphans];
@@ -285,7 +285,7 @@ describe('Graph Builder', () => {
     });
 
     it('has no agents/skills/commands', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       const allNodes = [...graph.nodes, ...graph.orphans];
@@ -295,7 +295,7 @@ describe('Graph Builder', () => {
     });
 
     it('CLAUDE.md with no references is an orphan', () => {
-      const inventory = scan({ projectDir });
+      const inventory = scan({ projectDir, skipGlobalDirs: true });
       const graph = buildDependencyGraph(inventory, projectDir);
 
       // In minimal project, CLAUDE.md has no @imports or agent/skill references

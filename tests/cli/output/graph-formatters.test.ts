@@ -312,7 +312,7 @@ describe('formatters with graph-complex fixture', () => {
   const projectDir = join(FIXTURES, 'graph-complex');
 
   function getGraph(): DependencyGraph {
-    const inventory = scan({ projectDir });
+    const inventory = scan({ projectDir, skipGlobalDirs: true });
     return buildDependencyGraph(inventory, projectDir);
   }
 

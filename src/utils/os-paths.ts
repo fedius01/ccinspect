@@ -72,6 +72,31 @@ export function getUserCommandsDir(): string {
   return join(getHomeDir(), '.claude', 'commands');
 }
 
+export function getUserRulesDir(): string {
+  return join(getHomeDir(), '.claude', 'rules');
+}
+
+export function getUserSkillsDir(): string {
+  return join(getHomeDir(), '.claude', 'skills');
+}
+
+export function getEnterpriseClaudeMdPath(): string {
+  const os = detectOs();
+  switch (os) {
+    case 'macos':
+      return '/Library/Application Support/ClaudeCode/CLAUDE.md';
+    case 'linux':
+    case 'windows-wsl':
+      return '/etc/claude-code/CLAUDE.md';
+    case 'windows':
+      return join(
+        process.env.PROGRAMFILES || 'C:\\Program Files',
+        'ClaudeCode',
+        'CLAUDE.md',
+      );
+  }
+}
+
 export function getAutoMemoryDir(projectIdentifier: string): string {
   return join(getHomeDir(), '.claude', 'projects', projectIdentifier, 'memory');
 }
