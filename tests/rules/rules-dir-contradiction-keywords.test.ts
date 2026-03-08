@@ -3,6 +3,7 @@ import { join } from 'path';
 import {
   contradictionKeywordsRule,
   generateCategoryPairs,
+  extractTopicWords,
 } from '../../src/rules/rules-dir/contradiction-keywords.js';
 import { globArraysOverlap } from '../../src/utils/glob-overlap.js';
 import { resolve } from '../../src/core/resolver.js';
@@ -301,6 +302,99 @@ describe('rules-dir/contradiction-keywords rule', () => {
     });
     const issues = contradictionKeywordsRule.check(inventory, resolved);
     expect(issues).toHaveLength(0);
+  });
+
+  it('skips negation pair when topics differ (always use prettier vs never use class components)', () => {
+    const crossRef = join(FIXTURES, 'cross-reference');
+    const inventory = makeInventory({
+      rules: [
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'always-use-prettier.md'),
+          relativePath: '.claude/rules/always-use-prettier.md',
+        }),
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'never-use-classes.md'),
+          relativePath: '.claude/rules/never-use-classes.md',
+        }),
+      ],
+    });
+    const issues = contradictionKeywordsRule.check(inventory, resolved);
+    const negationIssues = issues.filter((i) => i.message.includes('always use vs never use'));
+    expect(negationIssues).toHaveLength(0);
+  });
+
+  it('detects negation pair when topics match (always use prettier vs never use prettier)', () => {
+    const crossRef = join(FIXTURES, 'cross-reference');
+    const inventory = makeInventory({
+      rules: [
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'always-use-prettier.md'),
+          relativePath: '.claude/rules/always-use-prettier.md',
+        }),
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'never-use-prettier.md'),
+          relativePath: '.claude/rules/never-use-prettier.md',
+        }),
+      ],
+    });
+    const issues = contradictionKeywordsRule.check(inventory, resolved);
+    const negationIssues = issues.filter((i) => i.message.includes('always use vs never use'));
+    expect(negationIssues.length).toBeGreaterThan(0);
+  });
+
+  it('TOOL_CATEGORIES pairs are unaffected by topic matching', () => {
+    const crossRef = join(FIXTURES, 'cross-reference');
+    const inventory = makeInventory({
+      rules: [
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'use-jest.md'),
+          relativePath: '.claude/rules/use-jest.md',
+        }),
+        makeRuleFileInfo({
+          path: join(crossRef, '.claude', 'rules', 'use-vitest.md'),
+          relativePath: '.claude/rules/use-vitest.md',
+        }),
+      ],
+    });
+    const issues = contradictionKeywordsRule.check(inventory, resolved);
+    const testRunnerIssues = issues.filter((i) => i.message.includes('test-runner'));
+    expect(testRunnerIssues.length).toBeGreaterThan(0);
+  });
+});
+
+describe('extractTopicWords()', () => {
+  it('extracts words after phrase', () => {
+    expect(extractTopicWords('Always use prettier for formatting', 'always use'))
+      .toEqual(['prettier', 'formatting']);
+  });
+
+  it('filters out short words (<=3 chars)', () => {
+    expect(extractTopicWords('Always use it for the job', 'always use'))
+      .toEqual([]);
+  });
+
+  it('returns up to 5 words', () => {
+    const result = extractTopicWords(
+      'Always use alpha bravo charlie delta echo foxtrot golf',
+      'always use',
+    );
+    expect(result).toHaveLength(5);
+    expect(result).toEqual(['alpha', 'bravo', 'charlie', 'delta', 'echo']);
+  });
+
+  it('is case-insensitive', () => {
+    expect(extractTopicWords('ALWAYS USE Prettier', 'always use'))
+      .toEqual(['prettier']);
+  });
+
+  it('strips punctuation from words', () => {
+    expect(extractTopicWords('Always use prettier.', 'always use'))
+      .toEqual(['prettier']);
+  });
+
+  it('returns empty for no match', () => {
+    expect(extractTopicWords('Never require tests', 'always use'))
+      .toEqual([]);
   });
 });
 

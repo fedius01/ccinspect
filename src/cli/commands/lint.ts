@@ -41,9 +41,11 @@ export function registerLintCommand(program: Command): void {
   program
     .command('lint [target]')
     .description('Validate configuration against best practices')
+    .option('-v, --verbose', 'Show expanded output with all issues and full evidence')
     .action(async (target: string | undefined, _options: unknown, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals();
       const format = globalOpts.format as string | undefined;
+      const verbose = globalOpts.verbose as boolean | undefined;
 
       // Determine if target is a file
       if (target) {
@@ -57,7 +59,7 @@ export function registerLintCommand(program: Command): void {
 
         if (statSync(resolvedTarget).isFile()) {
           // === SINGLE-FILE MODE ===
-          await runSingleFileMode(resolvedTarget, format);
+          await runSingleFileMode(resolvedTarget, format, verbose);
           return;
         }
 
@@ -76,6 +78,7 @@ export function registerLintCommand(program: Command): void {
 async function runSingleFileMode(
   absolutePath: string,
   format: string | undefined,
+  verbose: boolean | undefined,
 ): Promise<void> {
   let ctx;
   try {
@@ -123,7 +126,7 @@ async function runSingleFileMode(
     console.log();
     console.log(chalk.bold.cyan(`⚡ Single-file mode: ${displayName} (${label})`));
     console.log(chalk.dim('  Cross-file and project-level rules skipped'));
-    printLintResult(result);
+    printLintResult(result, { projectRoot: ctx.inventory.projectRoot, verbose });
   }
 
   if (result.stats.errors > 0) {
@@ -136,6 +139,7 @@ function runDirectoryMode(
   globalOpts: Record<string, unknown>,
 ): void {
   const format = globalOpts.format as string | undefined;
+  const verbose = globalOpts.verbose as boolean | undefined;
 
   if (
     !existsSync(resolvedProjectDir) ||
@@ -190,7 +194,7 @@ function runDirectoryMode(
   } else if (format === 'md') {
     console.log(printLintResultMarkdown(result));
   } else {
-    printLintResult(result);
+    printLintResult(result, { projectRoot: resolvedProjectDir, verbose });
   }
 
   // Exit with non-zero if there are errors

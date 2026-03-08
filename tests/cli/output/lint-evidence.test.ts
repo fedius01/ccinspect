@@ -49,7 +49,7 @@ describe('terminal formatter evidence', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders evidence lines when present', () => {
+  it('renders evidence lines with pipe prefix when present', () => {
     const evidence: LintEvidence[] = [
       { file: 'architecture.md', line: 12, content: 'use tabs for indentation in all files' },
       { file: 'frontend.md', line: 5, content: 'use spaces for consistent formatting' },
@@ -57,25 +57,25 @@ describe('terminal formatter evidence', () => {
     const result = makeResult([makeIssue({ evidence })]);
     printLintResult(result);
 
-    expect(output).toContain('Evidence:');
-    expect(output).toContain('architecture.md:12');
+    expect(output).toContain('\u2502 architecture.md:12');
     expect(output).toContain('"use tabs for indentation in all files"');
-    expect(output).toContain('frontend.md:5');
+    expect(output).toContain('\u2502 frontend.md:5');
     expect(output).toContain('"use spaces for consistent formatting"');
+    expect(output).not.toContain('Evidence:');
   });
 
-  it('does not render Evidence label when no evidence', () => {
+  it('does not render pipe lines when no evidence', () => {
     const result = makeResult([makeIssue()]);
     printLintResult(result);
 
-    expect(output).not.toContain('Evidence:');
+    expect(output).not.toContain('\u2502');
   });
 
-  it('does not render Evidence label when evidence is empty array', () => {
+  it('does not render pipe lines when evidence is empty array', () => {
     const result = makeResult([makeIssue({ evidence: [] })]);
     printLintResult(result);
 
-    expect(output).not.toContain('Evidence:');
+    expect(output).not.toContain('\u2502');
   });
 
   it('renders evidence without line number', () => {
@@ -85,8 +85,7 @@ describe('terminal formatter evidence', () => {
     const result = makeResult([makeIssue({ evidence })]);
     printLintResult(result);
 
-    expect(output).toContain('Evidence:');
-    expect(output).toContain('config.json');
+    expect(output).toContain('\u2502 config.json');
     expect(output).not.toContain('config.json:');
     expect(output).toContain('"some value"');
   });
@@ -117,15 +116,15 @@ describe('terminal formatter evidence', () => {
     expect(output).not.toContain('\u2026');
   });
 
-  it('renders single evidence item', () => {
+  it('renders single evidence item with pipe prefix', () => {
     const evidence: LintEvidence[] = [
       { file: 'rules/no-tabs.md', line: 3, content: 'never use tabs' },
     ];
     const result = makeResult([makeIssue({ evidence })]);
     printLintResult(result);
 
-    expect(output).toContain('Evidence:');
-    expect(output).toContain('rules/no-tabs.md:3');
+    expect(output).toContain('\u2502 rules/no-tabs.md:3');
+    expect(output).not.toContain('Evidence:');
   });
 });
 

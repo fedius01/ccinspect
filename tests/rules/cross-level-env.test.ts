@@ -93,6 +93,38 @@ describe('cross-level/env-shadows rule', () => {
     expect(issues[0].severity).toBe('info');
     expect(issues[0].category).toBe('cross-level');
     expect(issues[0].message).toContain('NODE_ENV');
+    // Short filenames in message, not full paths
+    expect(issues[0].message).toContain('settings.local.json');
+    expect(issues[0].message).toContain('shadows settings.json');
+    expect(issues[0].message).not.toContain('.claude/settings.local.json');
+  });
+
+  it('includes evidence with values and origins', () => {
+    const resolved = makeResolved({
+      environment: {
+        effective: new Map(),
+        shadows: [
+          {
+            name: 'NODE_ENV',
+            value: 'test',
+            origin: '/project/.claude/settings.local.json',
+            shadowedValues: [
+              { value: 'development', origin: '/project/.claude/settings.json' },
+            ],
+          },
+        ],
+      },
+    });
+
+    const issues = envShadowsRule.check(inventory, resolved);
+    expect(issues[0].evidence).toBeDefined();
+    expect(issues[0].evidence).toHaveLength(2);
+    // Effective value
+    expect(issues[0].evidence![0].file).toBe('/project/.claude/settings.local.json');
+    expect(issues[0].evidence![0].content).toBe('NODE_ENV=test');
+    // Shadowed value
+    expect(issues[0].evidence![1].file).toBe('/project/.claude/settings.json');
+    expect(issues[0].evidence![1].content).toBe('NODE_ENV=development (shadowed)');
   });
 
   it('reports multiple shadows', () => {

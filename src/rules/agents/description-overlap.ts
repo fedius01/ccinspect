@@ -88,7 +88,7 @@ export const descriptionOverlapRule: LintRule = {
             category: 'agents',
             message: `Agents "${a.name}" and "${b.name}" have similar descriptions (${(similarity * 100).toFixed(0)}% overlap). This may cause routing ambiguity.`,
             file: a.filePath,
-            suggestion: `Differentiate the descriptions to make agent routing unambiguous. "${a.name}": "${a.description}" vs "${b.name}": "${b.description}".`,
+            suggestion: 'Differentiate the descriptions to make agent routing unambiguous.',
             autoFixable: false,
             evidence: [
               { file: a.filePath, content: `description: "${truncDesc(a.description)}"` },

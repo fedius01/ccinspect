@@ -1,11 +1,12 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import chalk from 'chalk';
 import { Command } from 'commander';
 import { registerScanCommand } from './commands/scan.js';
 import { registerInfoCommand } from './commands/info.js';
 import { registerLintCommand } from './commands/lint.js';
-import { registerResolveCommand } from './commands/resolve.js';
+import { registerBlameCommand, runBlame } from './commands/blame.js';
 import { registerCompareCommand } from './commands/compare.js';
 import { registerSessionHandoverCommand } from './commands/session-handover.js';
 import { registerGraphCommand } from './commands/graph.js';
@@ -35,9 +36,24 @@ program
 registerScanCommand(program);
 registerInfoCommand(program);
 registerLintCommand(program);
-registerResolveCommand(program);
+registerBlameCommand(program);
 registerCompareCommand(program);
 registerSessionHandoverCommand(program);
 registerGraphCommand(program);
+
+// Deprecated alias: resolve → blame
+program
+  .command('resolve', { hidden: true })
+  .description('[deprecated] Use "cci blame" instead')
+  .option('--permissions', 'Show only permissions')
+  .option('--env', 'Show only environment variables')
+  .option('--mcp', 'Show only MCP servers')
+  .option('--model', 'Show only model configuration')
+  .option('--sandbox', 'Show only sandbox configuration')
+  .option('--all', 'Show all sections (default)')
+  .action((options: Record<string, unknown>, cmd: Command) => {
+    console.error(chalk.yellow('Warning: "cci resolve" is deprecated. Use "cci blame" instead.'));
+    runBlame(options, cmd);
+  });
 
 program.parse();

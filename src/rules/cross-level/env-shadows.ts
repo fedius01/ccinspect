@@ -1,4 +1,5 @@
-import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig } from '../../types/index.js';
+import { basename } from 'path';
+import type { LintRule, LintIssue, LintEvidence, ConfigInventory, ResolvedConfig } from '../../types/index.js';
 
 export const envShadowsRule: LintRule = {
   id: 'cross-level/env-shadows',
@@ -10,16 +11,26 @@ export const envShadowsRule: LintRule = {
     const issues: LintIssue[] = [];
 
     for (const shadow of resolved.environment.shadows) {
-      const otherOrigins = (shadow.shadowedValues ?? []).map((sv) => sv.origin).join(', ');
+      const shadowedValues = shadow.shadowedValues ?? [];
+      const shadowedFiles = shadowedValues.map((sv) => basename(sv.origin));
+
+      const evidence: LintEvidence[] = [
+        { file: shadow.origin, content: `${shadow.name}=${shadow.value}` },
+        ...shadowedValues.map((sv) => ({
+          file: sv.origin,
+          content: `${shadow.name}=${sv.value} (shadowed)`,
+        })),
+      ];
 
       issues.push({
         ruleId: 'cross-level/env-shadows',
         severity: 'info',
         category: 'cross-level',
-        message: `Environment variable '${shadow.name}' is set at multiple levels. Effective value from ${shadow.origin} shadows values from ${otherOrigins}.`,
+        message: `${shadow.name} is set at multiple levels \u2014 effective value from ${basename(shadow.origin)} shadows ${shadowedFiles.join(', ')}`,
         suggestion:
-          'Review if the env var override is intentional. Remove from lower-precedence files if redundant.',
+          'Review if the override is intentional. Remove from lower-precedence files if redundant.',
         autoFixable: false,
+        evidence,
       });
     }
 

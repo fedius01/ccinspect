@@ -62,6 +62,40 @@ const CONTRADICTION_PAIRS: Array<[string, string, string]> = [
   ...generateCategoryPairs(),
 ];
 
+/**
+ * Categories for generic negation pairs where the topic follows the phrase.
+ * "use semicolons"/"no semicolons" is NOT included — it already encodes the topic
+ * in the phrase itself, so topic-matching would be a false filter.
+ */
+const NEGATION_CATEGORIES = new Set([
+  'always use vs never use',
+  'always require vs never require',
+  'always include vs never include',
+]);
+
+/**
+ * Extract significant words (>3 chars) following a matched phrase in a line.
+ * Used to determine if two negation-pair matches discuss the same topic.
+ */
+export function extractTopicWords(line: string, phrase: string): string[] {
+  const idx = line.toLowerCase().indexOf(phrase.toLowerCase());
+  if (idx === -1) return [];
+  const after = line.slice(idx + phrase.length).trim();
+  return after
+    .split(/\s+/)
+    .map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length > 3)
+    .slice(0, 5);
+}
+
+/**
+ * Check if two sets of topic words share any significant word.
+ */
+function topicsOverlap(wordsA: string[], wordsB: string[]): boolean {
+  const setA = new Set(wordsA);
+  return wordsB.some(w => setA.has(w));
+}
+
 function hasPhrase(text: string, phrase: string): boolean {
   const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
@@ -137,13 +171,22 @@ export const contradictionKeywordsRule: LintRule = {
           if ((aHasFirst && bHasSecond) || (aHasSecond && bHasFirst)) {
             const pairKey = [ruleA.filePath, ruleB.filePath, category].sort().join('|');
             if (reported.has(pairKey)) continue;
-            reported.add(pairKey);
 
             // Determine which phrase was found in which file for evidence
             const matchedPhraseInA = aHasFirst ? phraseA : phraseB;
             const matchedPhraseInB = aHasFirst ? phraseB : phraseA;
             const evidenceA = findMatchLine(ruleA.lines, matchedPhraseInA);
             const evidenceB = findMatchLine(ruleB.lines, matchedPhraseInB);
+
+            // For explicit negation pairs, require shared topic words
+            // to avoid FPs like "always use prettier" vs "never use class components"
+            if (NEGATION_CATEGORIES.has(category) && evidenceA && evidenceB) {
+              const topicA = extractTopicWords(evidenceA.content, matchedPhraseInA);
+              const topicB = extractTopicWords(evidenceB.content, matchedPhraseInB);
+              if (!topicsOverlap(topicA, topicB)) continue;
+            }
+
+            reported.add(pairKey);
 
             const evidence: LintEvidence[] = [];
             if (evidenceA) evidence.push({ file: ruleA.filePath, line: evidenceA.line, content: evidenceA.content });

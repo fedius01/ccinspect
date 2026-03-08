@@ -1,4 +1,4 @@
-import { basename, dirname } from 'path';
+import { basename, dirname, resolve } from 'path';
 import chalk from 'chalk';
 import type { FileInfo, FileScope, ConfigInventory, LintResult, ResolvedConfig } from '../../types/index.js';
 import type { RuntimeInfo } from '../../types/runtime.js';
@@ -78,6 +78,35 @@ function severityIcon(severity: string): string {
     default:
       return ' ';
   }
+}
+
+// ---- Path shortening ----
+
+/**
+ * Shorten a file path string for display.
+ * Project-relative files → strip project root (e.g., "CLAUDE.md", ".claude/settings.json")
+ * Home-dir files → ~/... prefix (e.g., "~/.claude/agents/smith.md")
+ * Relative paths with ../ → resolve first, then shorten
+ * Everything else → unchanged
+ */
+function shortenPath(filePath: string, projectRoot: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+
+  // Resolve relative paths (handles ../../../../../.claude/agents/smith.md)
+  const abs = filePath.startsWith('/') ? filePath : resolve(projectRoot, filePath);
+
+  // Project-relative takes priority
+  if (abs.startsWith(projectRoot + '/')) {
+    return abs.slice(projectRoot.length + 1);
+  }
+
+  // Home-dir files
+  if (home && abs.startsWith(home + '/')) {
+    return '~/' + abs.slice(home.length + 1);
+  }
+
+  // Fallback — keep original
+  return filePath;
 }
 
 // ---- Inventory table (scan) ----
@@ -464,41 +493,415 @@ export function printRuntimeInfo(info: RuntimeInfo): void {
 
 // ---- Lint Output ----
 
-export function printLintResult(result: LintResult): void {
+/** Display order and human-readable names for lint issue categories. */
+const CATEGORY_ORDER: Array<{ key: string; label: string }> = [
+  { key: 'memory', label: 'Memory' },
+  { key: 'settings', label: 'Settings' },
+  { key: 'cross-level', label: 'Cross-Level' },
+  { key: 'rules', label: 'Rules' },
+  { key: 'agents', label: 'Agents' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'commands', label: 'Commands' },
+  { key: 'budget', label: 'Budget' },
+  { key: 'mcp', label: 'MCP' },
+  { key: 'git', label: 'Git' },
+  { key: 'plugins', label: 'Plugins' },
+  { key: 'naming', label: 'Naming' },
+  { key: 'hooks', label: 'Hooks' },
+];
+
+const SEVERITY_ORDER: Record<string, number> = { error: 0, warning: 1, info: 2 };
+
+/**
+ * Rules that should be collapsed when 2+ issues share the same ruleId.
+ * Each entry defines how to render the collapsed group.
+ */
+const COLLAPSIBLE_RULES = new Set([
+  'settings/deny-sensitive-paths',
+  'memory/todo-fixme',
+  'memory/generic-instructions',
+  'rules-dir/dead-globs',
+  'rules-dir/overlapping-rules',
+  'rules-dir/large-rule-file',
+  'settings/dangerous-allow',
+  'agents/orphan-agent',
+  'agents/frontmatter-present',
+  'skills/frontmatter-present',
+]);
+
+type LintIssueItem = LintResult['issues'][number];
+
+/**
+ * Group same-ruleId issues for collapsed rendering.
+ * Returns individual issues or arrays of issues (collapsed groups).
+ */
+function groupIssuesForRendering(issues: LintIssueItem[]): Array<LintIssueItem | LintIssueItem[]> {
+  const seen = new Set<string>();
+  const result: Array<LintIssueItem | LintIssueItem[]> = [];
+
+  for (const issue of issues) {
+    if (seen.has(issue.ruleId)) continue;
+    seen.add(issue.ruleId);
+
+    const sameRule = issues.filter(i => i.ruleId === issue.ruleId);
+    if (sameRule.length >= 2 && COLLAPSIBLE_RULES.has(issue.ruleId)) {
+      result.push(sameRule);
+    } else {
+      for (const iss of sameRule) result.push(iss);
+    }
+  }
+  return result;
+}
+
+/** Check if a suggestion is redundant with the message (substring or >70% word overlap). */
+function isSuggestionRedundant(message: string, suggestion: string): boolean {
+  const msgLower = message.toLowerCase();
+  const sugLower = suggestion.toLowerCase();
+
+  // Suggestion is a substring of message
+  if (msgLower.includes(sugLower)) return true;
+
+  // Message is a substring of suggestion (restatement + minor addition)
+  if (sugLower.includes(msgLower)) return true;
+
+  // Significant word overlap (>70%)
+  const msgWords = new Set(msgLower.split(/\s+/).filter(w => w.length > 3));
+  const sugWords = sugLower.split(/\s+/).filter(w => w.length > 3);
+  if (msgWords.size === 0 || sugWords.length === 0) return false;
+
+  const overlap = sugWords.filter(w => msgWords.has(w)).length;
+  return overlap / sugWords.length > 0.6;
+}
+
+function renderSingleIssue(issue: LintIssueItem, projectRoot: string, verbose = false): void {
+  const icon = severityIcon(issue.severity);
+  const shortFile = issue.file ? shortenPath(issue.file, projectRoot) : '';
+  const lineRef = issue.line ? `:${issue.line}` : '';
+  const fileLabel = shortFile ? `${shortFile}${lineRef}` : '';
+  const ruleId = chalk.gray(`[${issue.ruleId}]`);
+
+  // Line 1: header — icon + file + ruleId
+  if (fileLabel) {
+    console.log(`  ${icon} ${chalk.bold(fileLabel)}  ${ruleId}`);
+  } else {
+    console.log(`  ${icon} ${ruleId}`);
+  }
+
+  // Line 2: message
+  console.log(`    ${issue.message}`);
+
+  // Evidence lines with │ pipe
+  if (issue.evidence && issue.evidence.length > 0) {
+    for (const ev of issue.evidence) {
+      const shortEvFile = shortenPath(ev.file, projectRoot);
+      const loc = ev.line ? `${shortEvFile}:${ev.line}` : shortEvFile;
+      let content = ev.content;
+      if (!verbose && content.length > 120) {
+        content = content.slice(0, 120) + '\u2026';
+      }
+      console.log(chalk.dim(`    \u2502 ${loc}  "${content}"`));
+    }
+  }
+
+  // Action line — suppress if redundant (unless verbose)
+  if (verbose || !isSuggestionRedundant(issue.message, issue.suggestion)) {
+    console.log(chalk.cyan(`    \u21b3 ${issue.suggestion}`));
+  }
+
+  // Blank line between issues
   console.log();
-  console.log(chalk.bold('ccinspect lint'));
+}
+
+// ---- Collapsed group renderers ----
+
+function highestSeverityIcon(issues: LintIssueItem[]): string {
+  const best = issues.reduce((a, b) =>
+    (SEVERITY_ORDER[a.severity] ?? 3) < (SEVERITY_ORDER[b.severity] ?? 3) ? a : b,
+  );
+  return severityIcon(best.severity);
+}
+
+function sharedFile(issues: LintIssueItem[], projectRoot: string): string {
+  const files = new Set(issues.map(i => i.file).filter(Boolean));
+  return files.size === 1 ? shortenPath([...files][0]!, projectRoot) : '';
+}
+
+function renderCollapsedHeader(issues: LintIssueItem[], projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const file = sharedFile(issues, projectRoot);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  if (file) {
+    console.log(`  ${icon} ${chalk.bold(file)}  ${ruleId}`);
+  } else {
+    console.log(`  ${icon} ${ruleId}`);
+  }
+}
+
+function renderCollapsedDenySensitivePaths(issues: LintIssueItem[], projectRoot: string): void {
+  renderCollapsedHeader(issues, projectRoot);
+  // Extract group name from "No deny rule protects {group.name}. Consider adding: ..."
+  const names = issues.map(iss => {
+    const m = iss.message.match(/protects\s+(.+?)\.\s*Consider/i);
+    return m ? m[1] : iss.message.slice(0, 40);
+  });
+  console.log(`    ${issues.length} sensitive paths unprotected: ${names.join(', ')}`);
+  console.log(chalk.cyan(`    \u21b3 Add Read/Write deny patterns to settings.json for each`));
+  console.log();
+}
+
+function renderCollapsedTodoFixme(issues: LintIssueItem[], projectRoot: string): void {
+  renderCollapsedHeader(issues, projectRoot);
+  const lines = issues.map(iss => iss.line).filter((l): l is number => l !== undefined);
+  const lineStr = lines.length > 0 ? ` at lines ${lines.join(', ')}` : '';
+  console.log(`    ${issues.length} stale TODO/FIXME markers${lineStr}`);
+  console.log(chalk.cyan(`    \u21b3 Resolve or remove \u2014 stale markers may confuse Claude`));
+  console.log();
+}
+
+function renderCollapsedGenericInstructions(issues: LintIssueItem[], projectRoot: string): void {
+  renderCollapsedHeader(issues, projectRoot);
+  console.log(`    ${issues.length} generic instructions found`);
+  // Extract quoted instruction text from each message
+  for (const iss of issues) {
+    const m = iss.message.match(/"([^"]+)"$/);
+    const text = m ? m[1] : iss.message;
+    const lineRef = iss.line ? `line ${iss.line}: ` : '';
+    const truncated = text.length > 100 ? text.slice(0, 100) + '\u2026' : text;
+    console.log(chalk.dim(`    \u2502 ${lineRef}"${truncated}"`));
+  }
+  console.log(chalk.cyan(`    \u21b3 Replace with specific, actionable guidance`));
+  console.log();
+}
+
+function renderCollapsedDeadGlobs(issues: LintIssueItem[], projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  console.log(`  ${icon} ${ruleId}`);
+  console.log(`    ${issues.length} rule files have dead globs (no matching files)`);
+  for (const iss of issues) {
+    const fileName = iss.file ? basename(shortenPath(iss.file, projectRoot)) : 'unknown';
+    // Extract glob patterns from evidence content like 'glob "lib/**" matched 0 files'
+    const globs: string[] = [];
+    if (iss.evidence) {
+      for (const ev of iss.evidence) {
+        const m = ev.content.match(/glob "([^"]+)"/);
+        if (m) globs.push(m[1]);
+      }
+    }
+    const globStr = globs.length > 0 ? globs.join(', ') : '(unknown pattern)';
+    console.log(chalk.dim(`    \u2502 ${fileName} \u2192 ${globStr}`));
+  }
+  console.log(chalk.cyan(`    \u21b3 Remove the rules or update the glob patterns`));
+  console.log();
+}
+
+function renderCollapsedOverlappingRules(issues: LintIssueItem[], _projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  console.log(`  ${icon} ${ruleId}`);
+  console.log(`    ${issues.length} rule scope overlaps detected`);
+  for (const iss of issues) {
+    // Parse two quoted rule paths from message like: Rules ".claude/rules/a.md" and ".claude/rules/b.md"
+    const matches = [...iss.message.matchAll(/"([^"]+)"/g)];
+    if (matches.length >= 2) {
+      const a = basename(matches[0][1]);
+      const b = basename(matches[1][1]);
+      console.log(chalk.dim(`    \u2502 ${a} \u2194 ${b}`));
+    } else {
+      const short = iss.message.length > 100 ? iss.message.slice(0, 100) + '\u2026' : iss.message;
+      console.log(chalk.dim(`    \u2502 ${short}`));
+    }
+  }
+  console.log(chalk.cyan(`    \u21b3 Narrow globs or merge overlapping rules to reduce redundancy`));
+  console.log();
+}
+
+function renderCollapsedDangerousAllow(issues: LintIssueItem[], projectRoot: string): void {
+  renderCollapsedHeader(issues, projectRoot);
+  console.log(`    ${issues.length} dangerous allow patterns`);
+  for (const iss of issues) {
+    // Extract pattern from: Dangerous allow pattern "Bash" grants...
+    const m = iss.message.match(/pattern "([^"]+)"/);
+    const pattern = m ? m[1] : 'unknown';
+    // Extract description after "grants" or "allows"
+    const descM = iss.message.match(/(?:grants|allows)\s+(.+?)\.?\s*(?:Consider|$)/i);
+    const desc = descM ? descM[1] : '';
+    const suffix = desc ? ` \u2014 ${desc}` : '';
+    console.log(chalk.dim(`    \u2502 "${pattern}"${suffix}`));
+  }
+  console.log(chalk.cyan(`    \u21b3 Scope to specific commands/paths (e.g., Bash(npm run *), Edit(src/**))`));
+  console.log();
+}
+
+function renderCollapsedOrphanAgent(issues: LintIssueItem[], _projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  console.log(`  ${icon} ${ruleId}`);
+  // Extract agent names from message or file path
+  const names = issues.map(iss => {
+    const m = iss.message.match(/Agent "([^"]+)"/);
+    if (m) return m[1];
+    if (iss.file) return basename(iss.file, '.md');
+    return 'unknown';
+  });
+  console.log(`    ${issues.length} agents not referenced by other config: ${names.join(', ')}`);
+  console.log(chalk.cyan(`    \u21b3 These may be invoked directly by prompts \u2014 remove if unused`));
+  console.log();
+}
+
+function renderCollapsedLargeRuleFile(issues: LintIssueItem[], _projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  console.log(`  ${icon} ${ruleId}`);
+  console.log(`    ${issues.length} large rule files`);
+  for (const iss of issues) {
+    const filename = iss.file ? basename(iss.file) : 'unknown';
+    const tokenMatch = iss.message.match(/is\s+([\d,]+)\s+tokens/);
+    const tokens = tokenMatch ? tokenMatch[1] : '?';
+    console.log(chalk.dim(`    \u2502 ${filename} \u2014 ${tokens} tokens`));
+  }
+  console.log(chalk.cyan(`    \u21b3 Split into smaller rules with narrower scopes, or extract reference material to docs/`));
+  console.log();
+}
+
+function renderCollapsedFrontmatterPresent(issues: LintIssueItem[], _projectRoot: string): void {
+  const icon = highestSeverityIcon(issues);
+  const ruleId = chalk.gray(`[${issues[0].ruleId}]`);
+  console.log(`  ${icon} ${ruleId}`);
+  const names = issues.map(iss => {
+    if (iss.file) return basename(iss.file);
+    return 'unknown';
+  });
+  let type = 'config';
+  if (issues[0].ruleId.startsWith('agents/')) type = 'agent';
+  else if (issues[0].ruleId.startsWith('skills/')) type = 'skill';
+  console.log(`    ${issues.length} ${type} files have no YAML frontmatter: ${names.join(', ')}`);
+  console.log(chalk.cyan(`    \u21b3 Add frontmatter with fields like "tools", "model", and "disallowedTools"`));
+  console.log();
+}
+
+function renderCollapsedGeneric(issues: LintIssueItem[], projectRoot: string): void {
+  renderCollapsedHeader(issues, projectRoot);
+  console.log(`    ${issues.length} issues`);
+  const limit = Math.min(issues.length, 3);
+  for (let i = 0; i < limit; i++) {
+    const short = issues[i].message.length > 100
+      ? issues[i].message.slice(0, 100) + '\u2026'
+      : issues[i].message;
+    console.log(chalk.dim(`    \u2502 ${short}`));
+  }
+  if (issues.length > 3) {
+    console.log(chalk.dim(`    \u2502 ...and ${issues.length - 3} more`));
+  }
+  console.log(chalk.cyan(`    \u21b3 ${issues[0].suggestion}`));
+  console.log();
+}
+
+function renderCollapsedGroup(issues: LintIssueItem[], projectRoot: string): void {
+  switch (issues[0].ruleId) {
+    case 'settings/deny-sensitive-paths':
+      renderCollapsedDenySensitivePaths(issues, projectRoot);
+      break;
+    case 'memory/todo-fixme':
+      renderCollapsedTodoFixme(issues, projectRoot);
+      break;
+    case 'memory/generic-instructions':
+      renderCollapsedGenericInstructions(issues, projectRoot);
+      break;
+    case 'rules-dir/dead-globs':
+      renderCollapsedDeadGlobs(issues, projectRoot);
+      break;
+    case 'rules-dir/overlapping-rules':
+      renderCollapsedOverlappingRules(issues, projectRoot);
+      break;
+    case 'settings/dangerous-allow':
+      renderCollapsedDangerousAllow(issues, projectRoot);
+      break;
+    case 'agents/orphan-agent':
+      renderCollapsedOrphanAgent(issues, projectRoot);
+      break;
+    case 'rules-dir/large-rule-file':
+      renderCollapsedLargeRuleFile(issues, projectRoot);
+      break;
+    case 'agents/frontmatter-present':
+    case 'skills/frontmatter-present':
+      renderCollapsedFrontmatterPresent(issues, projectRoot);
+      break;
+    default:
+      renderCollapsedGeneric(issues, projectRoot);
+      break;
+  }
+}
+
+function renderIssueGroup(issues: LintResult['issues'], projectRoot: string, verbose = false): void {
+  if (verbose) {
+    // Render every issue individually — no collapsing
+    for (const issue of issues) {
+      renderSingleIssue(issue, projectRoot, true);
+    }
+  } else {
+    // Current behavior — group and collapse
+    const renderItems = groupIssuesForRendering(issues);
+    for (const item of renderItems) {
+      if (Array.isArray(item)) {
+        renderCollapsedGroup(item, projectRoot);
+      } else {
+        renderSingleIssue(item, projectRoot);
+      }
+    }
+  }
+}
+
+export interface PrintLintOptions {
+  projectRoot?: string;
+  verbose?: boolean;
+}
+
+export function printLintResult(result: LintResult, opts?: PrintLintOptions): void {
+  const projectRoot = opts?.projectRoot || process.cwd();
+  const verbose = opts?.verbose ?? false;
+
+  console.log();
+  console.log(chalk.bold('ccinspect lint') + (verbose ? chalk.gray(' (verbose)') : ''));
   console.log();
 
   if (result.issues.length === 0) {
     console.log(chalk.green('\u2713 No issues found. Configuration looks good!'));
   } else {
-    // Collect raw data for alignment
-    const issueRows = result.issues.map((issue) => {
-      const lineRef = issue.line ? `:${issue.line}` : '';
-      const fileRef = issue.file ? `(${issue.file}${lineRef})` : '';
-      const ruleId = `[${issue.ruleId}]`;
-      return { issue, fileRef, ruleId };
-    });
+    // Group by category
+    type IssueItem = LintResult['issues'][number];
+    const grouped = new Map<string, IssueItem[]>();
+    for (const issue of result.issues) {
+      const cat = issue.category;
+      if (!grouped.has(cat)) grouped.set(cat, []);
+      grouped.get(cat)!.push(issue);
+    }
 
-    // Calculate max widths
-    const maxMsg = Math.max(...issueRows.map((r) => r.issue.message.length));
-    const maxFile = Math.max(...issueRows.map((r) => r.fileRef.length));
+    // Sort within each group by severity (error → warning → info)
+    for (const issues of grouped.values()) {
+      issues.sort((a, b) =>
+        (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
+      );
+    }
 
-    for (const { issue, fileRef, ruleId } of issueRows) {
-      const icon = severityIcon(issue.severity);
-      const msg = issue.message.padEnd(maxMsg);
-      const file = fileRef ? chalk.gray(fileRef.padEnd(maxFile)) : ''.padEnd(maxFile);
-      console.log(`${icon} ${msg}  ${file}  ${chalk.gray(ruleId)}`);
-      console.log(chalk.gray(`  \u2192 ${issue.suggestion}`));
-      if (issue.evidence && issue.evidence.length > 0) {
-        console.log(chalk.dim('  Evidence:'));
-        for (const ev of issue.evidence) {
-          const loc = ev.line ? `${ev.file}:${ev.line}` : ev.file;
-          const content = ev.content.length > 120 ? ev.content.slice(0, 120) + '\u2026' : ev.content;
-          console.log(chalk.dim(`    ${loc}  "${content}"`));
-        }
-      }
+    // Render groups in defined order
+    for (const { key, label } of CATEGORY_ORDER) {
+      const issues = grouped.get(key);
+      if (!issues || issues.length === 0) continue;
+
+      const issueWord = issues.length === 1 ? 'issue' : 'issues';
+      console.log(chalk.bold(`${label} (${issues.length} ${issueWord})`));
       console.log();
+      renderIssueGroup(issues, projectRoot, verbose);
+    }
+
+    // Catch any categories not in CATEGORY_ORDER (defensive)
+    for (const [cat, issues] of grouped) {
+      if (CATEGORY_ORDER.some((c) => c.key === cat)) continue;
+      const issueWord = issues.length === 1 ? 'issue' : 'issues';
+      console.log(chalk.bold(`${cat} (${issues.length} ${issueWord})`));
+      console.log();
+      renderIssueGroup(issues, projectRoot, verbose);
     }
   }
 
@@ -513,6 +916,34 @@ export function printLintResult(result: LintResult): void {
   console.log(
     `${parts.join(', ')} | ${result.stats.rulesRun} rules checked | ${result.stats.filesChecked} files scanned | ${result.stats.duration}ms`,
   );
+
+  // Most affected files
+  const fileCounts = new Map<string, number>();
+  for (const issue of result.issues) {
+    if (!issue.file) continue;
+    const short = shortenPath(issue.file, projectRoot);
+    fileCounts.set(short, (fileCounts.get(short) || 0) + 1);
+  }
+
+  const AGGREGATE_PREFIXES = ['.claude/rules/', '.claude/agents/', '.claude/skills/', '.claude/commands/'];
+  const aggregated = new Map<string, number>();
+  for (const [file, count] of fileCounts) {
+    const prefix = AGGREGATE_PREFIXES.find((p) => file.startsWith(p));
+    if (prefix) {
+      const key = prefix.slice(0, -1) + '/*';
+      aggregated.set(key, (aggregated.get(key) || 0) + count);
+    } else {
+      aggregated.set(file, (aggregated.get(file) || 0) + count);
+    }
+  }
+
+  const sorted = [...aggregated.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 3).filter(([, count]) => count > 0);
+  if (top.length > 0) {
+    const fileParts = top.map(([file, count]) => `${file} (${count})`);
+    console.log(chalk.gray(`Most affected: ${fileParts.join(', ')}`));
+  }
+
   console.log();
 }
 
@@ -528,7 +959,7 @@ interface ResolveSections {
 
 export function printResolvedConfig(resolved: ResolvedConfig, sections: ResolveSections): void {
   console.log();
-  console.log(chalk.bold('ccinspect resolve'));
+  console.log(chalk.bold('ccinspect blame'));
   console.log();
 
   if (sections.permissions) {
