@@ -6,11 +6,11 @@
 
 A CLI tool that inspects, validates, and visualizes Claude Code configurations across all layers (enterprise, user, project-shared, project-local).
 
-Scan · Lint · Resolve · Compare
+Scan · Lint · Blame · Compare · Graph
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-705%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-860%20passing-brightgreen)]()
 
 </div>
 
@@ -32,11 +32,12 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 
 **ccinspect** fixes that with next capabilities:
 
-🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status  
+🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status
 🧹 **Lint** — runs 43 rules catching security gaps, dead references, conflicts, and bloat
 📋 **Evidence** — see exactly which lines triggered each detection
-🔗 **Resolve** — shows the effective config after all layers merge, with origin tracking
-⚖️ **Compare** — diffs configurations across projects side-by-side  
+🔗 **Blame** — shows the effective config after all layers merge, with origin tracking and precedence badges
+⚖️ **Compare** — diffs configurations across projects side-by-side
+🗺️ **Graph** — visualizes config dependency graph with orphan and broken reference detection
 
 > Fully offline. No API keys. Just point it at a project.
 
@@ -55,17 +56,32 @@ cci lint
 
 > **Tip:** `cci` and `ccinspect` are interchangeable — use whichever you prefer.
 
+## Which command do I need?
+
+**`cci scan`** — *"What do I have?"* — Discovers every config file across all scopes, shows sizes, token counts, and git status. Flags when a user-level file is shadowed by a project-level equivalent. Doesn't look inside files — just the inventory.
+
+**`cci lint`** — *"What's wrong?"* — Runs 43 rules checking for dead globs, contradictions, dangerous permissions, oversized files, stale imports, and more. The quality gate.
+
+**`cci blame`** — *"What's actually in effect?"* — After all layers merge, shows which permissions apply, which env vars win, which MCP servers are active — and which file is responsible. The answer to "I set X but it's not working."
+
+**`cci graph`** — *"How do things connect?"* — Which agents reference which skills, which rules apply to which paths, what imports what. The dependency map.
+
+**`cci compare`** — *"How do two projects differ?"* — Side-by-side diff of configurations across directories.
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `cci scan` | Discover and inventory all config files with sizes, token counts, and git status |
+| `cci scan` | Discover and inventory all config files with sizes, token counts, and git status. Use `--all` to include config locations that don't exist yet |
 | `cci lint [target]` | Run 43 rules — pass a directory or a single config file |
-| `cci resolve` | Show effective config after all layers merge, with origin tracking |
+| `cci blame` | Show effective config after all layers merge, with origin tracking |
+| `cci blame settings` | Show raw settings key-value pairs with source badges |
 | `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
 | `cci info` | Show runtime info — CLI version, active model, auth method |
 | `cci session-handover` | Generate status.md from git diff, test results, and typecheck |
 | `cci graph` | Visualize config dependency graph — text, mermaid, HTML, or JSON output |
+
+> **Scan output:** When a user-global agent, skill, or command is shadowed by a project-level equivalent of the same name, `cci scan` dims the entry and marks it `(inactive)` — so you can see why a global config isn't taking effect.
 
 ### Single-file mode
 
@@ -77,7 +93,14 @@ cci lint .claude/settings.json
 cci lint .claude/agents/researcher.md
 ```
 
-Supported file types: `CLAUDE.md`, `settings.json`, `.mcp.json`, `.claude/rules/*.md`, `.claude/agents/*.md`, `SKILL.md`, `.claude/commands/*.md`
+The file is auto-classified by name and path. Only rules relevant to that file type run — cross-file and project-level rules are skipped. Output shows the detected type:
+
+```
+⚡ Single-file mode: researcher.md (agent)
+  Cross-file and project-level rules skipped
+```
+
+Detected types: `memory` (CLAUDE.md), `settings` (settings.json), `MCP` (.mcp.json), `rule` (rules/*.md), `agent` (agents/*.md), `skill` (SKILL.md), `command` (commands/*.md)
 
 ## Common flags
 
@@ -85,6 +108,8 @@ Supported file types: `CLAUDE.md`, `settings.json`, `.mcp.json`, `.claude/rules/
 --project-dir <path>   Target a different project directory
 --format json|md       Machine-readable output (default: terminal)
 --exclude <glob>       Skip paths from scan/lint
+--all                  Show all possible config locations, including files that don't exist yet
+-v, --verbose          Expanded output with all issues and full evidence
 ```
 
 ## Rule categories
@@ -131,10 +156,10 @@ ccinspect supports `.ccinspect.json` for rule enable/disable, severity overrides
 ccinspect discovers and analyzes these Claude Code configuration surfaces:
 
 - **Settings** — `~/.claude/settings.json`, `.claude/settings.json`, `.claude/settings.local.json`, managed policies
-- **Memory** — `CLAUDE.md` at global, project, local, and subdirectory levels; `MEMORY.md` auto-memory
-- **Rules** — `.claude/rules/*.md` with YAML frontmatter and path globs
+- **Memory** — `CLAUDE.md` at enterprise, global, project, local, and subdirectory levels; `MEMORY.md` auto-memory
+- **Rules** — `.claude/rules/*.md` (project) and `~/.claude/rules/*.md` (user-global)
 - **Agents** — `.claude/agents/*.md` and `~/.claude/agents/*.md`
-- **Skills** — `.claude/skills/*/SKILL.md`
+- **Skills** — `.claude/skills/**/SKILL.md` (project) and `~/.claude/skills/**/SKILL.md` (user-global)
 - **Commands** — `.claude/commands/*.md` and `~/.claude/commands/*.md`
 - **MCP** — `.mcp.json` and managed MCP configs
 - **Hooks** — Hook definitions in settings files
@@ -160,7 +185,7 @@ src/
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths
-tests/        Vitest test suite (705 tests)
+tests/        Vitest test suite (860 tests)
 documentation/         Configuration
 ```
 
