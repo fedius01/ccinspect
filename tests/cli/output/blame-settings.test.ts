@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { FileInfo } from '../../../src/types/index.js';
 import {
   buildSettingsTable,
   printBlameSettings,
