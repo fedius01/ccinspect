@@ -1245,7 +1245,7 @@ describe('lint output verbose mode', () => {
         ruleId: 'agents/frontmatter-present',
         file: '.claude/agents/legacy-helper.md',
         message: 'Agent file .claude/agents/legacy-helper.md has no YAML frontmatter.',
-        suggestion: 'Add YAML frontmatter with fields like "tools", "model", and "allowedTools" to configure the agent.',
+        suggestion: 'Add YAML frontmatter with at minimum "name" and "description". Optional fields include "tools", "model", and "permissionMode".',
       }),
       makeIssue({
         category: 'agents',
@@ -1253,7 +1253,7 @@ describe('lint output verbose mode', () => {
         ruleId: 'agents/frontmatter-present',
         file: '.claude/agents/smith.md',
         message: 'Agent file .claude/agents/smith.md has no YAML frontmatter.',
-        suggestion: 'Add YAML frontmatter with fields like "tools", "model", and "allowedTools" to configure the agent.',
+        suggestion: 'Add YAML frontmatter with at minimum "name" and "description". Optional fields include "tools", "model", and "permissionMode".',
       }),
     ]);
     printLintResult(result);
@@ -1262,7 +1262,7 @@ describe('lint output verbose mode', () => {
     expect(output).toContain('legacy-helper.md');
     expect(output).toContain('smith.md');
     expect(output).toContain('[agents/frontmatter-present]');
-    expect(output).toContain('disallowedTools');
+    expect(output).toContain('permissionMode');
     // Should NOT show individual messages
     expect(output).not.toContain('Agent file .claude/agents/legacy-helper.md has no');
   });

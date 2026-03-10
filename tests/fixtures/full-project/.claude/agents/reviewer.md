@@ -1,4 +1,5 @@
 ---
+name: reviewer
 tools:
   - Read
   - Bash

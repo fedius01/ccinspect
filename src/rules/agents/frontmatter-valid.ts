@@ -1,17 +1,30 @@
 import type { LintRule, LintIssue, ConfigInventory, ResolvedConfig, FileInfo } from '../../types/index.js';
 import { parseAgentMd } from '../../parsers/agents-md.js';
 
-// Source: https://code.claude.com/docs/en/sub-agents (retrieved 2026-03-01)
+// Source: https://code.claude.com/docs/en/sub-agents + changelog (retrieved 2026-03-06)
+// See docs/settings-cards/agents.md v1.1.0 for full field reference
 const KNOWN_FIELDS = new Set([
   'name',
   'description',
   'tools',
+  'disallowedTools',
   'model',
   'permissionMode',
   'skills',
+  'mcpServers',
+  'hooks',
+  'maxTurns',
   'memory',
   'color',
+  'background',
+  'isolation',
 ]);
+
+// Fields that are explicitly invalid with specific fix suggestions
+const INVALID_FIELDS: Record<string, string> = {
+  allowedTools:
+    'allowedTools is not valid agent frontmatter — it is silently ignored. Use tools (allowlist) or disallowedTools (denylist) instead. Note: Skills use allowed-tools (hyphenated), which is also invalid here.',
+};
 
 export const agentFrontmatterValidRule: LintRule = {
   id: 'agents/frontmatter-valid',
@@ -34,15 +47,33 @@ export const agentFrontmatterValidRule: LintRule = {
         continue;
       }
 
+      // Check for missing required name field (error severity — can void entire agent directory)
+      if (parsed.frontmatter.name === undefined) {
+        issues.push({
+          ruleId: 'agents/frontmatter-valid',
+          severity: 'error',
+          category: 'agents',
+          message: `Agent file ${agent.relativePath} missing required name field. A missing or malformed name can silently prevent all agents in the directory from loading (GitHub #6377, #17154).`,
+          file: agent.path,
+          suggestion: 'Add a name field to the frontmatter, e.g. name: "my-agent".',
+          autoFixable: false,
+        });
+      }
+
       // Validate tools field if present
-      if (parsed.frontmatter.tools !== undefined && !Array.isArray(parsed.frontmatter.tools)) {
+      if (
+        parsed.frontmatter.tools !== undefined &&
+        typeof parsed.frontmatter.tools !== 'string' &&
+        !Array.isArray(parsed.frontmatter.tools)
+      ) {
         issues.push({
           ruleId: 'agents/frontmatter-valid',
           severity: 'warning',
           category: 'agents',
-          message: `Agent file ${agent.relativePath} has a "tools" field that is not an array.`,
+          message: `Agent file ${agent.relativePath} has a "tools" field that is not a string or array.`,
           file: agent.path,
-          suggestion: 'The "tools" field should be an array of tool names, e.g. tools: ["Bash", "Read"].',
+          suggestion:
+            'The "tools" field should be a comma-separated string or array, e.g. tools: "Bash, Read" or tools: ["Bash", "Read"].',
           autoFixable: false,
         });
       }
@@ -60,9 +91,19 @@ export const agentFrontmatterValidRule: LintRule = {
         });
       }
 
-      // Warn on unknown fields
+      // Check for explicitly invalid fields, then unknown fields
       for (const key of Object.keys(parsed.frontmatter)) {
-        if (!KNOWN_FIELDS.has(key)) {
+        if (key in INVALID_FIELDS) {
+          issues.push({
+            ruleId: 'agents/frontmatter-valid',
+            severity: 'warning',
+            category: 'agents',
+            message: `Agent file ${agent.relativePath}: ${INVALID_FIELDS[key]}`,
+            file: agent.path,
+            suggestion: 'Remove allowedTools and use tools or disallowedTools instead.',
+            autoFixable: false,
+          });
+        } else if (!KNOWN_FIELDS.has(key)) {
           issues.push({
             ruleId: 'agents/frontmatter-valid',
             severity: 'warning',

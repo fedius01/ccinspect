@@ -30,7 +30,7 @@ export const agentFrontmatterPresentRule: LintRule = {
           message: `Agent file ${agent.relativePath} has no YAML frontmatter.`,
           file: agent.path,
           suggestion:
-            'Add YAML frontmatter with fields like "tools", "model", and "allowedTools" to configure the agent.',
+            'Add YAML frontmatter with at minimum "name" and "description". Optional fields include "tools", "model", and "permissionMode".',
           autoFixable: false,
         });
       }
