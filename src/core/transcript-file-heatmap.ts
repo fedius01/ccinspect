@@ -28,7 +28,7 @@ function isExcluded(filePath: string): boolean {
   return EXCLUDE_PATTERNS.some((p) => p.test(filePath));
 }
 
-export interface FileHeatmapOptions {
+interface FileHeatmapOptions {
   /** Max entries per category (default: 10). */
   maxResults?: number;
   /** Minimum shared sessions for co-edit clustering (default: 3). */

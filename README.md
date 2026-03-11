@@ -4,13 +4,13 @@
 
 **Claude Code Configuration Inspector**
 
-A CLI tool that inspects, validates, and visualizes Claude Code configurations across all layers (enterprise, user, project-shared, project-local).
+A CLI tool that inspects, validates, and visualizes Claude Code configurations across all layers (enterprise, user, project-shared, project-local) — and cross-references them against actual runtime behavior.
 
-Scan · Lint · Blame · Compare · Graph
+Scan · Lint · Blame · Audit · Recover
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-860%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)]()
 
 </div>
 
@@ -38,8 +38,12 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 🔗 **Blame** — shows the effective config after all layers merge, with origin tracking and precedence badges
 ⚖️ **Compare** — diffs configurations across projects side-by-side
 🗺️ **Graph** — visualizes config dependency graph with orphan and broken reference detection
+🔬 **Audit** — cross-references your config against actual Claude Code runtime behavior
+🩺 **Diagnose** — detects write-blindness, ghost agents, orphan confirmations, unused config
+💰 **Economics** — token usage, cache efficiency, API-equivalent cost per session
+🔄 **Recover** — generates a paste-ready recovery prompt from interrupted sessions
 
-> Fully offline. No API keys. Just point it at a project.
+> Fully offline. No API keys. No hooks to install. Just point it at a project.
 
 ## Quick start
 
@@ -56,6 +60,22 @@ cci lint
 
 > **Tip:** `cci` and `ccinspect` are interchangeable — use whichever you prefer.
 
+## Runtime analysis
+
+```bash
+# What config was actually used? Any issues?
+cci audit
+
+# Session statistics and token costs
+cci logs stats
+cci logs stats --cost
+
+# Recover from an interrupted session
+cci session-recover
+```
+
+> Fully offline. Reads Claude Code's existing session data. No hooks to install.
+
 ## Which command do I need?
 
 **`cci scan`** — *"What do I have?"* — Discovers every config file across all scopes, shows sizes, token counts, and git status. Flags when a user-level file is shadowed by a project-level equivalent. Doesn't look inside files — just the inventory.
@@ -67,6 +87,14 @@ cci lint
 **`cci graph`** — *"How do things connect?"* — Which agents reference which skills, which rules apply to which paths, what imports what. The dependency map.
 
 **`cci compare`** — *"How do two projects differ?"* — Side-by-side diff of configurations across directories.
+
+**`cci audit`** — *"Is my config actually working at runtime?"* — Cross-references your static configuration against what actually happened in Claude Code sessions. Shows which agents were delegated to, which rules loaded, which MCP servers were called — and which were never used. Detects write-blindness, ghost delegations, and orphan confirmations. The runtime reality check.
+
+**`cci logs stats`** — *"What does my Claude Code usage look like?"* — Session statistics: tool distribution, file activity, delegations, token usage. Add `--cost` for API-equivalent pricing breakdown with cache efficiency analysis.
+
+**`cci session-recover`** — *"My session crashed. What was I doing?"* — Parses the last session to extract the task in progress, files modified, last successful checkpoint, and any errors. Generates a paste-ready recovery prompt to continue in a new session.
+
+**`cci session-handover`** — *"Bring a new session up to speed."* — Generates a status summary from git diff, test results, and typecheck. Add `--transcript` for task narrative, tool usage, and git correlation from the previous session.
 
 ## Commands
 
@@ -80,6 +108,9 @@ cci lint
 | `cci info` | Show runtime info — CLI version, active model, auth method |
 | `cci session-handover` | Generate status.md from git diff, test results, and typecheck |
 | `cci graph` | Visualize config dependency graph — text, mermaid, HTML, or JSON output |
+| `cci audit` | Config utilization audit — which config was actually used at runtime |
+| `cci logs stats [--cost]` | Session statistics and token economics from transcript data |
+| `cci session-recover` | Generate a recovery prompt from the last interrupted session |
 
 > **Scan output:** When a user-global agent, skill, or command is shadowed by a project-level equivalent of the same name, `cci scan` dims the entry and marks it `(inactive)` — so you can see why a global config isn't taking effect.
 
@@ -101,6 +132,30 @@ The file is auto-classified by name and path. Only rules relevant to that file t
 ```
 
 Detected types: `memory` (CLAUDE.md), `settings` (settings.json), `MCP` (.mcp.json), `rule` (rules/*.md), `agent` (agents/*.md), `skill` (SKILL.md), `command` (commands/*.md)
+
+## What does `cci audit` find?
+
+`cci audit` reads Claude Code's session data to answer questions your static config can't. No API keys, no hooks — fully offline.
+
+**Are my agents being used?**
+> Agent `researcher` had 8 delegations across 5 sessions. Agent `smith` had 0 delegations in 135 sessions — safe to remove.
+
+**Are my rules actually loading?**
+> Rule `testing.md` was loaded in 92/148 sessions. But in 3 sessions, matching files were Edited without being Read first — the rule never loaded.
+
+This is **write-blindness**: path-scoped rules only load when Claude Reads a matching file. If Claude Edits the file directly, your rule instructions aren't in context. ccinspect is the only tool that detects this.
+
+**Which MCP servers are in use?**
+> MCP server `github` had 34 tool calls. Server `filesystem` is configured but was never called. Server `taskmaster-ai` was used at runtime but is not in your current config.
+
+**What about Agent Teams?**
+> 14 ephemeral agents created via Agent Teams across 3 sessions — shown as an informational summary, not false warnings.
+
+**Which files get the most attention?**
+> High-churn files, read-only references, files edited without reading, and test correlation — what percentage of edited source files had corresponding test activity.
+
+**How much does it cost?**
+> `cci logs stats --cost` shows API-equivalent token costs with cache breakdown, startup context analysis, and per-model pricing. Subscription plan users see a note that they're not billed per-token.
 
 ## Common flags
 
@@ -164,6 +219,7 @@ ccinspect discovers and analyzes these Claude Code configuration surfaces:
 - **MCP** — `.mcp.json` and managed MCP configs
 - **Hooks** — Hook definitions in settings files
 - **Plugins** — Plugin enable/disable across scopes
+- **Transcripts** — `~/.claude/projects/<project>/` JSONL session files (for `cci audit`, `cci logs stats`, `cci session-recover`)
 
 ## Development
 
@@ -180,12 +236,12 @@ npm run dev -- scan
 ```
 src/
   cli/        CLI entry point and commands
-  core/       Scanner, resolver, linter engines
-  parsers/    Typed parsers for each config format
+  core/       Scanner, resolver, linter, transcript analyzer engines
+  parsers/    Typed parsers for each config format, including JSONL transcripts
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
-  utils/      Token counting, git helpers, OS paths
-tests/        Vitest test suite (860 tests)
+  utils/      Token counting, git helpers, OS paths, transcript discovery
+tests/        Vitest test suite (1200+ tests)
 documentation/         Configuration
 ```
 

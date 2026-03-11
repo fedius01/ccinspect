@@ -852,7 +852,7 @@ function renderIssueGroup(issues: LintResult['issues'], projectRoot: string, ver
   }
 }
 
-export interface PrintLintOptions {
+interface PrintLintOptions {
   projectRoot?: string;
   verbose?: boolean;
 }
@@ -957,7 +957,7 @@ interface ResolveSections {
   sandbox: boolean;
 }
 
-export interface PrintBlameOptions {
+interface PrintBlameOptions {
   projectRoot?: string;
   inventory?: ConfigInventory;
   verbose?: boolean;
@@ -2002,7 +2002,7 @@ function badgeWithLabel(coloredBadge: string): string {
 }
 
 // Export shared utilities for use by blame subcommands
-export { buildSourceLegend, originBadge, shortenPath, badgeWithLabel, SCOPE_LABELS };
+export { buildSourceLegend, shortenPath };
 export type { SourceEntry };
 
 // ------- Compare Output -------

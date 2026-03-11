@@ -142,6 +142,21 @@ function printAuditTerminal(
   );
   console.log();
 
+  // Count warnings/infos for the summary footer
+  const warningCount =
+    discrepancyReport.discrepancies.filter((d) => d.severity === 'warning').length +
+    report.rules.pathScoped.filter((r) => r.writeBlindnessSessions > 0).length;
+  const infoCount = discrepancyReport.discrepancies.filter((d) => d.severity === 'info').length;
+
+  // Count which sections will actually render (for footer)
+  const rulesTotal = report.rules.pathScoped.length + report.rules.unconditional.length;
+  let surfacesRendered = 0;
+  if (report.agents.length > 0) surfacesRendered++;
+  if (report.skills.length > 0) surfacesRendered++;
+  if (rulesTotal > 0) surfacesRendered++;
+  if (report.mcpServers.length > 0) surfacesRendered++;
+  if (report.commands.length > 0) surfacesRendered++;
+
   // Sections
   printUtilizationSection(
     'Agents',
@@ -149,6 +164,9 @@ function printAuditTerminal(
     'delegated',
     'delegation',
     projectRoot,
+    {
+      unusedHint: (item) => `→ Remove ${item.configFile || item.name} or update its description`,
+    },
   );
   printUtilizationSection(
     'Skills',
@@ -156,6 +174,7 @@ function printAuditTerminal(
     'activated',
     'activation',
     projectRoot,
+    { unusedHint: () => '→ Remove or update this skill if no longer needed' },
   );
   printRulesSection(report.rules, report.sessionsAnalyzed, projectRoot);
   printUtilizationSection(
@@ -164,6 +183,7 @@ function printAuditTerminal(
     'used',
     'tool call',
     projectRoot,
+    { ghostHint: '→ Add to .mcp.json or remove from Claude Code settings' },
   );
   printUtilizationSection(
     'Commands',
@@ -171,9 +191,29 @@ function printAuditTerminal(
     'used',
     'invocation',
     projectRoot,
+    { unusedHint: () => '→ Remove or migrate to a skill (commands are legacy)' },
   );
   printFileHeatmapSection(fileHeatmap, report.sessionsAnalyzed, projectRoot);
   printDiscrepancySection(discrepancyReport);
+
+  // Summary footer
+  console.log(chalk.dim('  ──────────────────────────────────────────────────────────'));
+  const footerParts: string[] = [];
+  if (warningCount > 0)
+    footerParts.push(chalk.yellow(`${warningCount} warning${warningCount !== 1 ? 's' : ''}`));
+  if (infoCount > 0)
+    footerParts.push(chalk.blue(`${infoCount} info`));
+  if (footerParts.length === 0)
+    footerParts.push(chalk.green('no issues'));
+  footerParts.push(`${surfacesRendered} config surface${surfacesRendered !== 1 ? 's' : ''} audited`);
+  footerParts.push(`${report.sessionsAnalyzed} session${report.sessionsAnalyzed !== 1 ? 's' : ''} analyzed`);
+  console.log('  ' + footerParts.join('  ·  '));
+  console.log();
+}
+
+interface SectionHints {
+  unusedHint?: (item: ConfigUtilization) => string;
+  ghostHint?: string;
 }
 
 function printUtilizationSection(
@@ -182,6 +222,7 @@ function printUtilizationSection(
   usedVerb: string,
   unitSingular: string,
   _projectRoot: string,
+  hints: SectionHints = {},
 ): void {
   if (items.length === 0) return;
 
@@ -222,6 +263,9 @@ function printUtilizationSection(
       console.log(
         '    ' + chalk.gray('○') + ' ' + item.name + pad + '0 ' + unitSingular + 's  ' + tag,
       );
+      if (hints.unusedHint) {
+        console.log(chalk.dim.cyan('          ' + hints.unusedHint(item)));
+      }
     }
   }
 
@@ -234,6 +278,9 @@ function printUtilizationSection(
       const detail = item.details ?? item.usageCount + ' ' + unitSingular + s(item.usageCount);
       const tag = chalk.gray('(' + item.confidence + ')');
       console.log('    ' + chalk.yellow('?') + ' ' + item.name + pad + detail + '  ' + tag);
+    }
+    if (hints.ghostHint) {
+      console.log(chalk.dim.cyan('      ' + hints.ghostHint));
     }
   }
 
@@ -296,7 +343,7 @@ function printRulesSection(
         const wbLabel = rule.writeBlindnessSessions + ' session' + s(rule.writeBlindnessSessions);
         if (rule.writeBlindnessFiles && rule.writeBlindnessFiles.length > 0) {
           console.log(
-            '          ' + chalk.yellow('⚠') + ' Matching files Edited-without-Read in ' + wbLabel + ':',
+            chalk.yellow(`          ⚠ Write-blindness: ${wbLabel} had matching files Edited without Read:`),
           );
           for (const wbFile of rule.writeBlindnessFiles) {
             const sessNote = wbFile.editSessions === 1 ? '1 session' : `${wbFile.editSessions} sessions`;
@@ -304,9 +351,10 @@ function printRulesSection(
           }
         } else {
           console.log(
-            '          ' + chalk.yellow('⚠') + ' Matching files Edited-without-Read in ' + wbLabel + '  ' + chalk.yellow('(write-blindness)'),
+            chalk.yellow(`          ⚠ Write-blindness: ${wbLabel} had matching files Edited without Read`),
           );
         }
+        console.log(chalk.dim.cyan('          → Add "Always Read a file before Editing" to CLAUDE.md'));
       }
     }
     console.log();
@@ -419,14 +467,21 @@ function printFileHeatmapSection(
   // Test correlation
   if (heatmap.testCorrelation.editedSourceFiles > 0) {
     const tc = heatmap.testCorrelation;
+    const pct = tc.correlationPercent;
+    let colorFn = chalk.red;
+    if (pct > 60) colorFn = chalk.green;
+    else if (pct >= 30) colorFn = chalk.yellow;
     console.log(`    ${chalk.bold('Test correlation:')}`);
     console.log(
-      `      ${tc.withTestActivity}/${tc.editedSourceFiles} edited source files had test file activity (${tc.correlationPercent}%)`,
+      colorFn(`      ${tc.withTestActivity}/${tc.editedSourceFiles} edited source files had test file activity (${pct}%)`),
     );
     if (tc.untestedFiles.length > 0) {
       console.log(
         `      ${tc.withoutTestActivity} source file${s(tc.withoutTestActivity)} edited without corresponding test activity`,
       );
+    }
+    if (pct < 30) {
+      console.log(chalk.dim.cyan('      → Consider adding a path-scoped rule to enforce test-after-edit discipline'));
     }
     console.log();
   }
@@ -449,8 +504,15 @@ function printFileHeatmapSection(
 function printDiscrepancySection(report: DiscrepancyReport): void {
   if (report.discrepancies.length === 0) return;
 
+  const warnings = report.discrepancies.filter((d) => d.severity === 'warning').length;
+  const infos = report.discrepancies.filter((d) => d.severity === 'info').length;
+  const breakdownParts: string[] = [];
+  if (warnings > 0) breakdownParts.push(`${warnings} warning${warnings !== 1 ? 's' : ''}`);
+  if (infos > 0) breakdownParts.push(`${infos} info`);
+  const breakdown = breakdownParts.length > 0 ? `  (${breakdownParts.join(' · ')})` : '';
   console.log(
-    `  ${chalk.bold('Discrepancies')}${' '.repeat(5)}${report.discrepancies.length} found`,
+    `  ${chalk.bold('Discrepancies')}${' '.repeat(5)}${report.discrepancies.length} found` +
+      chalk.dim(breakdown),
   );
   console.log();
 
@@ -461,7 +523,8 @@ function printDiscrepancySection(report: DiscrepancyReport): void {
       console.log(`      ${chalk.dim(d.evidence)}`);
     } else {
       const icon = d.severity === 'warning' ? chalk.yellow('\u26a0') : chalk.blue('\u2139');
-      const confTag = chalk.gray(`(${d.confidence}${d.sessionCount > 0 ? `, ${d.sessionCount}/${d.sessionsAnalyzed} sessions` : ''})`);
+      const sessionInfo = d.sessionCount > 0 ? `, ${d.sessionCount}/${d.sessionsAnalyzed} sessions` : '';
+      const confTag = chalk.gray(`(${d.confidence}${sessionInfo})`);
       console.log(`    ${icon} ${d.message}  ${confTag}`);
       if (d.evidence) {
         console.log(`      ${chalk.dim(d.evidence)}`);

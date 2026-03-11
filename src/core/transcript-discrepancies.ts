@@ -8,7 +8,7 @@ import type {
 } from '../types/transcript.js';
 import type { LintResult } from '../types/lint.js';
 
-export interface DiscrepancyOptions {
+interface DiscrepancyOptions {
   /** Minimum sessions for write-blindness to be flagged as recurring (default: 3). */
   writeBlindnessThreshold?: number;
 }

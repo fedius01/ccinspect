@@ -117,7 +117,7 @@ function readRawSettingsLayers(inventory: ConfigInventory): RawSettingsLayer[] {
   return layers;
 }
 
-export function runBlameSettings(options: BlameOptions, cmd: Command): void {
+function runBlameSettings(options: BlameOptions, cmd: Command): void {
   const globalOpts = cmd.optsWithGlobals();
   const projectDir = globalOpts.projectDir as string | undefined;
   const format = globalOpts.format as string | undefined;

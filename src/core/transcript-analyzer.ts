@@ -26,7 +26,7 @@ const BUILTIN_TOOLS = new Set([
   'Skill', 'ExitPlanMode', 'EnterPlanMode',
 ]);
 
-export interface AnalyzerOptions {
+interface AnalyzerOptions {
   /** Filter sessions to last N days (default: 30). */
   days?: number;
   /** Analyze a single specific session. */
@@ -35,52 +35,6 @@ export interface AnalyzerOptions {
   projectRoot: string;
 }
 
-/**
- * Load and aggregate transcript data for a project.
- *
- * Pipeline: discover sessions → filter by date → for each session:
- *   try cache → if miss, parse file → write cache → collect results
- * Then aggregate across all sessions.
- */
-export async function analyzeTranscripts(
-  options: AnalyzerOptions,
-): Promise<AggregateStats> {
-  const projectRoot = resolve(options.projectRoot);
-  const days = options.days ?? 30;
-
-  const discovery = await discoverTranscripts(projectRoot);
-  if (!discovery || discovery.sessionFiles.length === 0) {
-    return createEmptyStats();
-  }
-
-  // Filter sessions
-  let files = discovery.sessionFiles;
-  if (options.sessionId) {
-    files = files.filter((f) => f.sessionId === options.sessionId);
-  } else {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    files = files.filter((f) => f.lastModified >= cutoff);
-  }
-
-  if (files.length === 0) {
-    return createEmptyStats();
-  }
-
-  // Parse each session (with caching)
-  const results: TranscriptParseResult[] = [];
-  for (const file of files) {
-    const result = await loadSession(file);
-    if (result) results.push(result);
-  }
-
-  return aggregateParseResults(results, projectRoot);
-}
-
-/**
- * Same as analyzeTranscripts but also returns the raw parse results
- * (needed for token economics per-message analysis).
- */
 export async function analyzeTranscriptsWithResults(
   options: AnalyzerOptions,
 ): Promise<{ stats: AggregateStats; parseResults: TranscriptParseResult[] }> {
