@@ -35,6 +35,7 @@ function makeInventory(overrides: Partial<ConfigInventory> = {}): ConfigInventor
     projectMcp: null,
     managedMcp: null,
     plugins: [],
+    pluginAgents: [],
     hooks: [],
     totalFiles: 0,
     totalStartupTokens: 0,

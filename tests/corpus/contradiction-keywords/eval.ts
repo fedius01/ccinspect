@@ -91,6 +91,7 @@ function makeMinimalInventory(corpusDir: string, rules: RuleFileInfo[]): ConfigI
     projectMcp: null,
     managedMcp: null,
     plugins: [],
+    pluginAgents: [],
     hooks: [],
     totalFiles: rules.length,
     totalStartupTokens: 0,

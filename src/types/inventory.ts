@@ -68,6 +68,8 @@ export interface ConfigInventory {
 
   // Plugins
   plugins: PluginInfo[];
+  /** Agent files provided by installed plugins (e.g., from plugin cache directories). */
+  pluginAgents: FileInfo[];
 
   // Hooks
   hooks: HookInfo[];

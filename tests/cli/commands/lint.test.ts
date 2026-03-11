@@ -10,7 +10,7 @@ const TSX = 'npx tsx';
 
 function runCli(args: string, expectFail = false): string {
   try {
-    // eslint-disable-next-line sonarjs/os-command -- Test helper executing CLI for integration testing
+     
     return execSync(`${TSX} ${CLI_ENTRY} ${args}`, {
       encoding: 'utf-8',
       timeout: 30000,

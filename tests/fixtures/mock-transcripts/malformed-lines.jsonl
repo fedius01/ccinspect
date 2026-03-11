@@ -1,0 +1,6 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Hello, help me fix the tests"}]},"uuid":"u010","parentUuid":null,"isSidechain":false,"sessionId":"b2c3d4e5-f6a7-8901-bcde-f23456789012","version":"2.1.61","cwd":"/Users/dev/project","gitBranch":"main","timestamp":"2026-03-09T11:00:00.000Z"}
+this is not valid json at all
+{"foo":"bar","baz":42}
+{"type":"unknown-future-type","data":{"key":"value"},"sessionId":"b2c3d4e5-f6a7-8901-bcde-f23456789012","timestamp":"2026-03-09T11:00:03.000Z"}
+
+{"type":"assistant","message":{"model":"claude-sonnet-4-5-20250514","role":"assistant","content":[{"type":"text","text":"Sure, I can help fix the tests."}],"usage":{"input_tokens":500,"output_tokens":12,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}}},"uuid":"a010","parentUuid":"u010","isSidechain":false,"sessionId":"b2c3d4e5-f6a7-8901-bcde-f23456789012","version":"2.1.61","cwd":"/Users/dev/project","gitBranch":"main","timestamp":"2026-03-09T11:00:05.000Z","requestId":"req_010"}

@@ -369,6 +369,7 @@ export function scan(options: ScanOptions = {}): ConfigInventory {
     projectMcp,
     managedMcp,
     plugins: [],
+    pluginAgents: [],
     hooks: [],
     totalFiles,
     totalStartupTokens,

@@ -18,6 +18,9 @@ export function registerSessionHandoverCommand(program: Command): void {
     .option('--dry-run', 'Print to stdout instead of writing file')
     .option('--skip-tests', 'Skip running test command')
     .option('--skip-typecheck', 'Skip running typecheck command')
+    .option('--transcript', 'Include transcript-derived task narrative')
+    .option('--session <uuid>', 'Use a specific session (implies --transcript)')
+    .option('--since <duration>', 'Filter transcript events to time range (e.g., 2h, 30m)')
     .action(async (options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const projectDir = globalOpts.projectDir as string | undefined;
@@ -34,6 +37,9 @@ export function registerSessionHandoverCommand(program: Command): void {
       const handoverSection = ccinspectConfig.sessionHandover;
 
       // Build config: CLI flags > .ccinspect.json > defaults
+      // --session implies --transcript
+      const useTranscript = options.transcript || !!options.session || !!options.since;
+
       const config: HandoverConfig = {
         testCommand: options.testCommand ?? handoverSection?.testCommand ?? 'npm run test',
         typecheckCommand: options.typecheckCommand ?? handoverSection?.typecheckCommand ?? 'npx tsc --noEmit',
@@ -43,6 +49,9 @@ export function registerSessionHandoverCommand(program: Command): void {
         skipTests: options.skipTests ?? false,
         skipTypecheck: options.skipTypecheck ?? false,
         projectDir: resolvedProjectDir,
+        transcript: useTranscript,
+        sessionId: options.session as string | undefined,
+        since: options.since as string | undefined,
       };
 
       const result = await generateHandover(config);

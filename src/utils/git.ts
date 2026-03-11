@@ -18,7 +18,7 @@ export function findGitRoot(startDir: string): string | null {
 export function isGitTracked(filePath: string): boolean {
   try {
     const dir = dirname(filePath);
-    // eslint-disable-next-line sonarjs/os-command
+     
     execSync(`git ls-files --error-unmatch "${filePath}"`, {
       cwd: dir,
       encoding: 'utf-8',

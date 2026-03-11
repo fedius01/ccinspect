@@ -82,6 +82,7 @@ function createEmptyInventory(projectRoot: string, gitRoot: string | null): Conf
     projectMcp: null,
     managedMcp: null,
     plugins: [],
+    pluginAgents: [],
     hooks: [],
     totalFiles: 0,
     totalStartupTokens: 0,

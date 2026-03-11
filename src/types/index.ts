@@ -37,6 +37,36 @@ export type {
   DependencyGraph,
 } from './graph.js';
 
+export type {
+  ParseWarning,
+  TranscriptSession,
+  TranscriptEventKind,
+  TranscriptEvent,
+  ToolCall,
+  ToolResult,
+  TaskAttempt,
+  UsageSummary,
+  FileActivity,
+  DelegationRecord,
+  SkillActivationRecord,
+  AggregateStats,
+  RuntimeEvidence,
+  RuntimeFinding,
+  ConfigUtilization,
+  ComplianceResult,
+  RuleComplianceReport,
+  RuleUtilization,
+  UtilizationReport,
+  ConfigDiscrepancy,
+  DiscrepancyReport,
+  SessionFileInfo,
+  TranscriptDiscoveryResult,
+  MessageTokenSnapshot,
+  SessionTokenSnapshot,
+  CacheMissBreakdown,
+  TokenEconomicsReport,
+} from './transcript.js';
+
 import type { FileScope, ConfigInventory as CI } from './inventory.js';
 import type { ResolvedConfig as RC } from './resolved.js';
 

@@ -10,6 +10,9 @@ import { registerBlameCommand, runBlame } from './commands/blame.js';
 import { registerCompareCommand } from './commands/compare.js';
 import { registerSessionHandoverCommand } from './commands/session-handover.js';
 import { registerGraphCommand } from './commands/graph.js';
+import { registerLogsCommand } from './commands/logs.js';
+import { registerAuditCommand } from './commands/audit.js';
+import { registerSessionRecoverCommand } from './commands/session-recover.js';
 
 declare const PKG_VERSION: string | undefined;
 
@@ -40,6 +43,9 @@ registerBlameCommand(program);
 registerCompareCommand(program);
 registerSessionHandoverCommand(program);
 registerGraphCommand(program);
+registerLogsCommand(program);
+registerAuditCommand(program);
+registerSessionRecoverCommand(program);
 
 // Deprecated alias: resolve → blame
 program

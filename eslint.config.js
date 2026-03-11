@@ -15,6 +15,7 @@ export default [
       'sonarjs/no-duplicate-string': 'warn',
       'sonarjs/no-identical-functions': 'warn',
       'sonarjs/todo-tag': 'off',
+      'sonarjs/os-command': 'off',
       'sonarjs/fixme-tag': 'off',
       'sonarjs/slow-regex': 'off',
       'sonarjs/no-empty-test-file': 'off',

@@ -1,7 +1,12 @@
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
-import { basename, join } from 'path';
+import { basename, join, resolve } from 'path';
 import { findGitRoot } from '../utils/git.js';
+import type { TranscriptParseResult } from '../parsers/transcript-jsonl.js';
+import { parseTranscriptFile } from '../parsers/transcript-jsonl.js';
+import { discoverTranscripts } from '../utils/transcript-discovery.js';
+import { cleanPromptText, normalizePathsInText } from './session-recovery.js';
+import type { TaskAttempt, ToolCall, UsageSummary } from '../types/transcript.js';
 
 export interface HandoverConfig {
   testCommand: string;
@@ -12,6 +17,55 @@ export interface HandoverConfig {
   skipTests: boolean;
   skipTypecheck: boolean;
   projectDir: string;
+  /** Enable transcript integration. */
+  transcript?: boolean;
+  /** Target a specific session UUID (implies transcript). */
+  sessionId?: string;
+  /** Duration filter for transcript events (e.g., "2h", "30m"). */
+  since?: string;
+}
+
+/** Transcript-derived data for the handover output. */
+export interface TranscriptHandoverData {
+  /** Session metadata. */
+  sessionSummary: {
+    sessionId: string;
+    durationMinutes: number;
+    model: string | null;
+    turnCount: number;
+    toolCallCount: number;
+    compactionCount: number;
+  };
+
+  /** Token usage, if available. */
+  tokenUsage: UsageSummary | null;
+
+  /** Per-task narrative. */
+  tasks: TranscriptTaskSummary[];
+
+  /** Tool call counts by name. */
+  toolUsage: Array<{ name: string; count: number }>;
+
+  /** Git correlation results. */
+  gitCorrelation: {
+    claudeModified: string[];
+    manualEdits: string[];
+    reverted: string[];
+  };
+
+  /** Suggested next prompt from transcript. */
+  suggestedPrompt: string;
+}
+
+export interface TranscriptTaskSummary {
+  /** Outcome icon: checkmark, warning, cross, pause. */
+  outcome: TaskAttempt['outcome'];
+  /** Brief description from user prompt. */
+  description: string;
+  /** Files edited in this task. */
+  filesEdited: number;
+  /** Total tool calls in this task. */
+  toolCallCount: number;
 }
 
 export interface HandoverResult {
@@ -25,6 +79,8 @@ export interface HandoverResult {
   smellsResult: GateResult | null;
   todos: TodoItem[];
   suggestedPrompt: string;
+  /** Transcript data — only present when --transcript is used. */
+  transcriptData?: TranscriptHandoverData;
 }
 
 export interface FileChange {
@@ -49,7 +105,7 @@ const COMMAND_TIMEOUT = 60_000;
 
 function runCommand(command: string, cwd: string): { exitCode: number; stdout: string; stderr: string } {
   try {
-    // eslint-disable-next-line sonarjs/os-command
+     
     const stdout = execSync(command, {
       cwd,
       encoding: 'utf-8',
@@ -357,5 +413,244 @@ export async function generateHandover(config: HandoverConfig): Promise<Handover
 
   result.suggestedPrompt = buildSuggestedPrompt(result);
 
+  // Transcript integration (when --transcript or --session is used)
+  if (config.transcript || config.sessionId) {
+    const transcriptData = await collectTranscriptData(config, result);
+    if (transcriptData) {
+      result.transcriptData = transcriptData;
+    }
+  }
+
   return result;
+}
+
+// ---- Duration parsing ----
+
+/**
+ * Parse a duration string like "2h" or "30m" into milliseconds.
+ * Supports: Nh (hours), Nm (minutes).
+ */
+export function parseDuration(duration: string): number | null {
+  const match = duration.match(/^(\d+)([hm])$/);
+  if (!match) return null;
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  if (unit === 'h') return value * 60 * 60 * 1000;
+  if (unit === 'm') return value * 60 * 1000;
+  return null;
+}
+
+// ---- Format duration ----
+
+export function formatDuration(minutes: number): string {
+  if (minutes < 1) return '< 1 min';
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}min`;
+}
+
+// ---- Transcript data collection ----
+
+async function collectTranscriptData(
+  config: HandoverConfig,
+  handoverResult: HandoverResult,
+): Promise<TranscriptHandoverData | null> {
+  const projectRoot = resolve(config.projectDir);
+
+  // Discover transcripts
+  const discovery = await discoverTranscripts(projectRoot);
+  if (!discovery || discovery.sessionFiles.length === 0) {
+    return null;
+  }
+
+  // Find target session
+  let targetFile = discovery.sessionFiles[0]; // default: most recent
+  if (config.sessionId) {
+    const found = discovery.sessionFiles.find((f) => f.sessionId === config.sessionId);
+    if (!found) return null;
+    targetFile = found;
+  }
+
+  // Parse the session (always re-parse — need full events)
+  let parseResult: TranscriptParseResult;
+  try {
+    parseResult = await parseTranscriptFile(targetFile.filePath);
+  } catch {
+    return null;
+  }
+
+  // Apply --since filter if specified
+  let tasks = parseResult.tasks;
+  let toolCalls = parseResult.toolCalls;
+  if (config.since) {
+    const durationMs = parseDuration(config.since);
+    if (durationMs) {
+      const cutoff = new Date(Date.now() - durationMs);
+      tasks = tasks.filter((t) => t.startedAt >= cutoff);
+      toolCalls = toolCalls.filter((tc) => {
+        // Keep tool calls belonging to tasks in the filtered time range
+        return tasks.some((t) =>
+          tc.callId && t.toolCalls.some((ttc) => ttc.callId === tc.callId),
+        );
+      });
+      // If since filters everything, fall back to all data
+      if (tasks.length === 0) {
+        tasks = parseResult.tasks;
+        toolCalls = parseResult.toolCalls;
+      }
+    }
+  }
+
+  // Session summary
+  const session = parseResult.session;
+  const durationMs = (session.endedAt ?? new Date()).getTime() - session.startedAt.getTime();
+  const durationMinutes = durationMs / (1000 * 60);
+  const compactionCount = session.events.filter((e) => e.kind === 'system' && e.rawType === 'system').length;
+
+  const sessionSummary = {
+    sessionId: session.sessionId,
+    durationMinutes,
+    model: session.model,
+    turnCount: tasks.length,
+    toolCallCount: toolCalls.length,
+    compactionCount,
+  };
+
+  // Token usage
+  const tokenUsage = parseResult.tokenUsage.sessionsWithData > 0
+    ? parseResult.tokenUsage
+    : null;
+
+  // Task narrative
+  const taskSummaries = tasks.map((task) => buildTaskSummary(task, projectRoot));
+
+  // Tool usage breakdown
+  const toolCountMap = new Map<string, number>();
+  for (const tc of toolCalls) {
+    toolCountMap.set(tc.toolName, (toolCountMap.get(tc.toolName) ?? 0) + 1);
+  }
+  const toolUsage = [...toolCountMap.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Git correlation
+  const gitCorrelation = correlateGitChanges(handoverResult, toolCalls, projectRoot);
+
+  // Suggested next prompt from transcript
+  const suggestedPrompt = buildTranscriptSuggestedPrompt(tasks);
+
+  return {
+    sessionSummary,
+    tokenUsage,
+    tasks: taskSummaries,
+    toolUsage,
+    gitCorrelation,
+    suggestedPrompt,
+  };
+}
+
+function buildTaskSummary(task: TaskAttempt, projectRoot: string): TranscriptTaskSummary {
+  let description = cleanPromptText(task.prompt);
+  description = normalizePathsInText(description, projectRoot);
+  // Truncate to 100 chars
+  if (description.length > 100) {
+    description = description.slice(0, 100) + '...';
+  }
+
+  // Count files edited
+  const editedFiles = new Set<string>();
+  for (const tc of task.toolCalls) {
+    if (tc.toolName === 'Edit' || tc.toolName === 'Write') {
+      const fp = tc.input.file_path as string | undefined;
+      if (fp) editedFiles.add(fp);
+    }
+  }
+
+  return {
+    outcome: task.outcome,
+    description,
+    filesEdited: editedFiles.size,
+    toolCallCount: task.toolCalls.length,
+  };
+}
+
+function correlateGitChanges(
+  handoverResult: HandoverResult,
+  toolCalls: ToolCall[],
+  projectRoot: string,
+): TranscriptHandoverData['gitCorrelation'] {
+  // Get all file paths from git diff (both committed and uncommitted)
+  const gitFiles = new Set<string>();
+  for (const change of handoverResult.completedWork) {
+    gitFiles.add(change.path);
+  }
+  for (const change of handoverResult.uncommittedChanges) {
+    gitFiles.add(change.path);
+  }
+
+  // Get all file paths from transcript Edit/Write calls
+  const transcriptFiles = new Set<string>();
+  for (const tc of toolCalls) {
+    if (tc.toolName === 'Edit' || tc.toolName === 'Write') {
+      const fp = tc.input.file_path as string | undefined;
+      if (fp) {
+        // Normalize to project-relative
+        if (fp.startsWith(projectRoot + '/')) {
+          transcriptFiles.add(fp.slice(projectRoot.length + 1));
+        } else {
+          transcriptFiles.add(fp);
+        }
+      }
+    }
+  }
+
+  const claudeModified: string[] = [];
+  const manualEdits: string[] = [];
+  const reverted: string[] = [];
+
+  // Files in git AND transcript → Claude-modified
+  // Files in git but NOT transcript → manual edits
+  for (const file of gitFiles) {
+    if (transcriptFiles.has(file)) {
+      claudeModified.push(file);
+    } else {
+      manualEdits.push(file);
+    }
+  }
+
+  // Files in transcript but NOT git → reverted
+  for (const file of transcriptFiles) {
+    if (!gitFiles.has(file)) {
+      reverted.push(file);
+    }
+  }
+
+  return { claudeModified, manualEdits, reverted };
+}
+
+function buildTranscriptSuggestedPrompt(tasks: TaskAttempt[]): string {
+  if (tasks.length === 0) {
+    return 'The session completed successfully. Continue with the next planned task.';
+  }
+
+  const lastTask = tasks[tasks.length - 1];
+  const cleanedPrompt = cleanPromptText(lastTask.prompt);
+  const truncated = cleanedPrompt.length > 200
+    ? cleanedPrompt.slice(0, 200) + '...'
+    : cleanedPrompt;
+
+  switch (lastTask.outcome) {
+    case 'interrupted':
+      return `Continue the interrupted task: "${truncated}"`;
+    case 'failed':
+      return `Fix the failed task: "${truncated}"`;
+    case 'partial':
+      return `Complete the partially finished task: "${truncated}"`;
+    case 'success':
+    case 'unknown':
+    default:
+      return 'The session completed successfully. Continue with the next planned task.';
+  }
 }

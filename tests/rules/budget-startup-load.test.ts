@@ -42,6 +42,7 @@ function makeInventory(totalStartupTokens: number, overrides: Partial<ConfigInve
     projectMcp: null,
     managedMcp: null,
     plugins: [],
+    pluginAgents: [],
     hooks: [],
     totalFiles: 0,
     totalStartupTokens,
