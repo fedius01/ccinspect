@@ -4,9 +4,13 @@ import type {
   AggregateStats,
   ConfigDiscrepancy,
   DiscrepancyReport,
+  ToolCall,
   UtilizationReport,
 } from '../types/transcript.js';
 import type { LintResult } from '../types/lint.js';
+import type { TranscriptParseResult } from '../parsers/transcript-jsonl.js';
+import { parseAgentMd } from '../parsers/agents-md.js';
+import { extractAgentPatterns, type AgentPatterns } from '../utils/agent-pattern-extractor.js';
 
 interface DiscrepancyOptions {
   /** Minimum sessions for write-blindness to be flagged as recurring (default: 3). */
@@ -221,6 +225,183 @@ function detectGhostMcpServers(
   }
 
   return results;
+}
+
+// ---- Agent Bypass Detection (heuristic) ----
+
+/** Built-in agent names used for delegation bypass detection. */
+const BUILTIN_AGENTS = new Set([
+  'general-purpose', 'explore', 'plan',
+]);
+
+/**
+ * Detect when Claude runs an agent's commands directly via Bash or delegates
+ * to a built-in agent instead of using the configured custom agent.
+ *
+ * Confidence: heuristic — uses command pattern matching from agent markdown.
+ */
+export function detectAgentBypasses(
+  inventory: ConfigInventory,
+  parseResults: TranscriptParseResult[],
+): ConfigDiscrepancy[] {
+  if (parseResults.length === 0) return [];
+
+  const allAgentFiles = [...inventory.projectAgents, ...inventory.userAgents];
+  if (allAgentFiles.length === 0) return [];
+
+  // Parse each agent and extract patterns
+  interface AgentInfo {
+    name: string;
+    patterns: AgentPatterns;
+  }
+  const agents: AgentInfo[] = [];
+
+  for (const agentFile of allAgentFiles) {
+    const parsed = parseAgentMd(agentFile.path);
+    if (!parsed) continue;
+
+    // Skip agents with permissionMode: ignore
+    if (parsed.frontmatter.permissionMode === 'ignore') continue;
+
+    const name = typeof parsed.frontmatter.name === 'string'
+      ? parsed.frontmatter.name
+      : basename(agentFile.path, '.md');
+
+    const description = typeof parsed.frontmatter.description === 'string'
+      ? parsed.frontmatter.description
+      : '';
+
+    const patterns = extractAgentPatterns(name, description, parsed.content);
+    if (!patterns.hasPatterns) continue;
+
+    agents.push({ name, patterns });
+  }
+
+  if (agents.length === 0) return [];
+
+  const results: ConfigDiscrepancy[] = [];
+
+  for (const agent of agents) {
+    let directBypassCount = 0;
+    let delegationBypassCount = 0;
+    let correctDelegationCount = 0;
+    const matchedCommands = new Set<string>();
+
+    for (const result of parseResults) {
+      const { toolCalls } = result;
+
+      // Filter to non-sidechain calls only
+      const mainBashCalls = toolCalls.filter(
+        (tc) => tc.toolName === 'Bash' && !tc.isSidechain,
+      );
+      const mainAgentCalls = toolCalls.filter(
+        (tc) => (tc.toolName === 'Agent' || tc.toolName === 'Task') && !tc.isSidechain,
+      );
+
+      // Check correct delegation first
+      const correctlyDelegated = mainAgentCalls.some(
+        (tc) => matchesAgentName(tc, agent.name),
+      );
+      if (correctlyDelegated) {
+        correctDelegationCount++;
+        continue;
+      }
+
+      // Check direct bypass: Bash calls containing agent's command patterns
+      let isDirectBypass = false;
+      for (const bash of mainBashCalls) {
+        const command = typeof bash.input.command === 'string' ? bash.input.command : '';
+        if (!command) continue;
+        for (const pattern of agent.patterns.commandPatterns) {
+          if (command.toLowerCase().includes(pattern.toLowerCase())) {
+            isDirectBypass = true;
+            matchedCommands.add(pattern);
+          }
+        }
+      }
+
+      if (isDirectBypass) {
+        directBypassCount++;
+        continue;
+      }
+
+      // Check delegation bypass: Agent/Task call to built-in with matching prompt
+      let isDelegationBypass = false;
+      for (const agentCall of mainAgentCalls) {
+        const subagentType = getSubagentType(agentCall);
+        if (!subagentType || !BUILTIN_AGENTS.has(subagentType.toLowerCase())) continue;
+
+        const prompt = getAgentPrompt(agentCall);
+        if (!prompt) continue;
+
+        for (const pattern of agent.patterns.commandPatterns) {
+          if (prompt.toLowerCase().includes(pattern.toLowerCase())) {
+            isDelegationBypass = true;
+            matchedCommands.add(pattern);
+          }
+        }
+      }
+
+      if (isDelegationBypass) {
+        delegationBypassCount++;
+      }
+    }
+
+    const totalMatchingSessions = directBypassCount + delegationBypassCount + correctDelegationCount;
+    const bypassCount = directBypassCount + delegationBypassCount;
+
+    if (totalMatchingSessions > 0 && bypassCount > 0) {
+      results.push({
+        type: 'agent-bypass',
+        severity: 'info',
+        confidence: 'heuristic',
+        message: `Agent "${agent.name}" bypassed in ${bypassCount} of ${totalMatchingSessions} matching session${totalMatchingSessions !== 1 ? 's' : ''}`,
+        componentName: agent.name,
+        componentType: 'agent',
+        evidence: buildBypassEvidence(
+          directBypassCount,
+          delegationBypassCount,
+          correctDelegationCount,
+          [...matchedCommands],
+        ),
+        sessionCount: bypassCount,
+        sessionsAnalyzed: parseResults.length,
+      });
+    }
+  }
+
+  return results;
+}
+
+function matchesAgentName(tc: ToolCall, agentName: string): boolean {
+  const subagentType = getSubagentType(tc);
+  return subagentType !== null && subagentType.toLowerCase() === agentName.toLowerCase();
+}
+
+function getSubagentType(tc: ToolCall): string | null {
+  const val = tc.input.subagent_type ?? tc.input.agent;
+  return typeof val === 'string' ? val : null;
+}
+
+function getAgentPrompt(tc: ToolCall): string | null {
+  const prompt = tc.input.prompt ?? tc.input.description ?? tc.input.task;
+  return typeof prompt === 'string' ? prompt : null;
+}
+
+function buildBypassEvidence(
+  direct: number,
+  delegation: number,
+  correct: number,
+  matchedCommands: string[],
+): string {
+  const parts: string[] = [];
+  const cmds = matchedCommands.slice(0, 3).join(', ');
+  parts.push(`Matched commands: ${cmds}`);
+  if (direct > 0) parts.push(`${direct} session${direct !== 1 ? 's' : ''} ran commands directly`);
+  if (delegation > 0) parts.push(`${delegation} session${delegation !== 1 ? 's' : ''} delegated to general-purpose instead`);
+  if (correct > 0) parts.push(`${correct} session${correct !== 1 ? 's' : ''} delegated correctly`);
+  parts.push('→ Consider adding "MUST BE USED" or "ALWAYS delegate to this agent" to the agent description');
+  return parts.join('\n      ');
 }
 
 // ---- Helpers ----

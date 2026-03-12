@@ -1,14 +1,32 @@
-import { describe, it, expect } from 'vitest';
-import { detectDiscrepancies } from '../../src/core/transcript-discrepancies.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { detectDiscrepancies, detectAgentBypasses } from '../../src/core/transcript-discrepancies.js';
 import type { ConfigInventory, FileInfo } from '../../src/types/inventory.js';
 import type {
   AggregateStats,
   ConfigUtilization,
   RuleUtilization,
+  ToolCall,
   UsageSummary,
   UtilizationReport,
 } from '../../src/types/transcript.js';
+import type { TranscriptParseResult } from '../../src/parsers/transcript-jsonl.js';
 import type { LintResult, LintIssue } from '../../src/types/lint.js';
+
+// Mock parseAgentMd so we don't need real files
+vi.mock('../../src/parsers/agents-md.js', () => ({
+  parseAgentMd: (filePath: string) => {
+    const data = MOCK_AGENT_DATA.get(filePath);
+    return data ?? null;
+  },
+}));
+
+// Registry for mock agent data
+const MOCK_AGENT_DATA = new Map<string, {
+  filePath: string;
+  frontmatter: Record<string, unknown>;
+  hasFrontmatter: boolean;
+  content: string;
+}>();
 
 // ---- Helpers ----
 
@@ -743,5 +761,339 @@ describe('detectDiscrepancies', () => {
       expect(result.discrepancies[0].message).toContain('1 ephemeral agent');
       expect(result.discrepancies[0].message).toContain('1 session)');
     });
+  });
+});
+
+// ---- Agent Bypass Detection ----
+
+function makeToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
+  return {
+    toolName: 'Bash',
+    input: {},
+    callId: 'toolu_test',
+    callerType: 'tool',
+    requestId: 'req_test',
+    isSidechain: false,
+    ...overrides,
+  };
+}
+
+function makeParseResult(toolCalls: ToolCall[]): TranscriptParseResult {
+  return {
+    session: {
+      sessionId: 'test-session',
+      claudeCodeVersion: null,
+      model: null,
+      projectRoot: '/project',
+      gitBranch: null,
+      startedAt: new Date('2026-03-01'),
+      endedAt: new Date('2026-03-01'),
+      sourceFile: '/tmp/test.jsonl',
+      events: [],
+      parseWarnings: [],
+      completeness: 'exact',
+      skippedLineTypes: [],
+    },
+    toolCalls,
+    toolResults: [],
+    tasks: [],
+    tokenUsage: makeUsage(),
+    messageTokens: [],
+  };
+}
+
+function registerMockAgent(
+  path: string,
+  name: string,
+  body: string,
+  frontmatter: Record<string, unknown> = {},
+) {
+  MOCK_AGENT_DATA.set(path, {
+    filePath: path,
+    frontmatter: { name, ...frontmatter },
+    hasFrontmatter: true,
+    content: body,
+  });
+}
+
+describe('detectAgentBypasses', () => {
+  beforeEach(() => {
+    MOCK_AGENT_DATA.clear();
+  });
+
+  it('detects direct bypass — Bash runs agent commands without delegation', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `python -m pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'cd backend && python -m pytest -v 2>&1' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('agent-bypass');
+    expect(result[0].severity).toBe('info');
+    expect(result[0].confidence).toBe('heuristic');
+    expect(result[0].componentName).toBe('test-runner');
+    expect(result[0].evidence).toContain('ran commands directly');
+    expect(result[0].evidence).toContain('pytest');
+  });
+
+  it('detects delegation bypass — Agent call to general-purpose with matching prompt', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Agent',
+          input: {
+            subagent_type: 'general-purpose',
+            prompt: 'Run pytest on the backend code',
+          },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('agent-bypass');
+    expect(result[0].evidence).toContain('delegated to general-purpose instead');
+  });
+
+  it('no discrepancy when agent is correctly delegated', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Agent',
+          input: { subagent_type: 'test-runner' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('handles mixed sessions — reports bypass ratio correctly', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      // Session 1: direct bypass
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'python -m pytest -v' },
+        }),
+      ]),
+      // Session 2: delegation bypass
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Agent',
+          input: {
+            subagent_type: 'general-purpose',
+            prompt: 'Run pytest on tests/',
+          },
+        }),
+      ]),
+      // Session 3: correct delegation
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Agent',
+          input: { subagent_type: 'test-runner' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].message).toContain('bypassed in 2 of 3 matching sessions');
+    expect(result[0].evidence).toContain('1 session ran commands directly');
+    expect(result[0].evidence).toContain('1 session delegated to general-purpose instead');
+    expect(result[0].evidence).toContain('1 session delegated correctly');
+  });
+
+  it('skips agent with no extractable patterns', () => {
+    const agentPath = '/project/.claude/agents/reviewer.md';
+    registerMockAgent(agentPath, 'reviewer', 'Review code quality. Think carefully about edge cases.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'npm test' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('does not count sidechain Bash calls as bypass', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        // Correct delegation
+        makeToolCall({
+          toolName: 'Agent',
+          input: { subagent_type: 'test-runner' },
+        }),
+        // Agent's own Bash call inside sidechain
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'python -m pytest tests/ -v' },
+          isSidechain: true,
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('skips agent with permissionMode: ignore', () => {
+    const agentPath = '/project/.claude/agents/disabled-agent.md';
+    registerMockAgent(agentPath, 'disabled-agent', 'Run `pytest` always.', {
+      permissionMode: 'ignore',
+    });
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'pytest -v' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty when no matching sessions', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest` to verify tests.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    // Sessions with only Edit/Read — no Bash, no Agent calls
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Edit',
+          input: { file: 'src/app.ts' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('derives agent name from filename when frontmatter name missing', () => {
+    const agentPath = '/project/.claude/agents/linter.md';
+    MOCK_AGENT_DATA.set(agentPath, {
+      filePath: agentPath,
+      frontmatter: {},
+      hasFrontmatter: true,
+      content: 'Run `ruff check .` on all Python files.',
+    });
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'ruff check . --fix' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].componentName).toBe('linter');
+  });
+
+  it('returns empty when no agents configured', () => {
+    const inventory = makeInventory({ projectAgents: [], userAgents: [] });
+    const parseResults = [
+      makeParseResult([
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: 'npm test' },
+        }),
+      ]),
+    ];
+
+    const result = detectAgentBypasses(inventory, parseResults);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty when no parse results', () => {
+    const agentPath = '/project/.claude/agents/test-runner.md';
+    registerMockAgent(agentPath, 'test-runner', 'Run `pytest`.');
+
+    const inventory = makeInventory({
+      projectAgents: [makeFileInfo({ path: agentPath })],
+    });
+
+    const result = detectAgentBypasses(inventory, []);
+
+    expect(result).toHaveLength(0);
   });
 });

@@ -8,7 +8,7 @@ import {
   enrichWithCompliance,
   type UtilizationOptions,
 } from '../../core/transcript-utilization.js';
-import { detectDiscrepancies } from '../../core/transcript-discrepancies.js';
+import { detectDiscrepancies, detectAgentBypasses } from '../../core/transcript-discrepancies.js';
 import { resolve } from '../../core/resolver.js';
 import { Linter } from '../../core/linter.js';
 import { getAllRules } from '../../rules/index.js';
@@ -82,6 +82,10 @@ export function registerAuditCommand(program: Command): void {
         report,
         lintResult,
       );
+
+      // 4b. Detect agent bypass patterns (heuristic)
+      const agentBypasses = detectAgentBypasses(inventory, parseResults);
+      discrepancyReport.discrepancies.push(...agentBypasses);
 
       // 5. Compute file heatmap
       const fileHeatmap = analyzeFileHeatmap(stats, { maxResults: 5 });

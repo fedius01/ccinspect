@@ -209,6 +209,11 @@ export interface AggregateStats {
   bashCommandTokens: Set<string>;
 }
 
+// ---- Confidence levels ----
+
+/** Confidence level for runtime-derived findings. */
+export type FindingConfidence = 'exact' | 'strong' | 'heuristic';
+
 // ---- Runtime findings (for cci audit) ----
 
 /** A single piece of evidence supporting a runtime finding. */
@@ -224,13 +229,8 @@ export interface RuntimeFinding {
   /** Finding ID, e.g., "utilization/agent-unused". */
   id: string;
   severity: 'info' | 'warning';
-  /**
-   * Confidence level:
-   * - 'exact' — binary fact from transcript data (0 delegations)
-   * - 'strong' — high-confidence inference (file Read but rule didn't trigger)
-   * - 'heuristic' — keyword/pattern matching, may have false positives
-   */
-  confidence: 'exact' | 'strong' | 'heuristic';
+  /** Confidence level of this finding. */
+  confidence: FindingConfidence;
   message: string;
   /** Number of data points supporting this finding. */
   evidenceCount: number;
@@ -444,11 +444,12 @@ export interface ConfigDiscrepancy {
     | 'permission-contradiction'
     | 'write-blindness-recurring'
     | 'ghost-mcp-server'
-    | 'ephemeral-teammates';
+    | 'ephemeral-teammates'
+    | 'agent-bypass';
   /** Severity — orphan-confirmed upgrades from info to warning. */
   severity: 'info' | 'warning';
   /** Confidence level. */
-  confidence: 'exact' | 'strong';
+  confidence: FindingConfidence;
   /** Human-readable description. */
   message: string;
   /** The config component involved. */
