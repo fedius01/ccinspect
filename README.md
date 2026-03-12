@@ -10,7 +10,10 @@ Scan · Lint · Blame · Audit · Recover
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-1233%2B%20passing-brightgreen)]()
+
+<br>
+<img src="documentation/assets/demo.gif" alt="ccinspect demo" width="720">
 
 </div>
 
@@ -59,6 +62,47 @@ cci lint
 ```
 
 > **Tip:** `cci` and `ccinspect` are interchangeable — use whichever you prefer.
+
+## What it catches
+
+```
+$ cci lint
+
+Settings (3 issues)
+  ⚠ [settings/sandbox-recommended]     Sandbox is not enabled
+  ⚠ [settings/deny-env-files]          Missing deny rules for .env files
+
+Rules (3 issues)
+  ⚠ [rules-dir/contradiction-keywords] Potential contradiction between rules
+    │ architecture.md:100  "server components by default"
+    │ frontend.md:46       "separate server components from client components"
+
+Agents (2 issues)
+  ✖ [agents/frontmatter-valid]         Missing required name field
+  ℹ [agents/orphan-agent]              3 agents never referenced
+
+Git (1 issue)
+  ⚠ [git/local-settings-tracked]       settings.local.json tracked in git
+```
+
+```
+$ cci audit
+
+Agents     3 configured · 1 delegated · 2 never delegated
+  ✓ test-runner     1 delegation across 1 session
+  ○ nlp-reviewer    0 delegations (44 sessions searched)
+
+MCP Servers   1 configured · 3 used
+  ✓ taskmaster-ai   1 tool call
+  ? deepwiki        2 tool calls (not in current config)
+
+Discrepancies
+  ℹ Agent "test-runner" bypassed in 9 of 10 matching sessions
+    Matched commands: pytest
+    → Add "MUST BE USED" to agent description
+```
+
+> Static lint catches config mistakes. Runtime audit catches config that doesn't work in practice.
 
 ## Runtime analysis
 
