@@ -15,7 +15,7 @@ import { parseSettingsJson } from '../../parsers/settings-json.js';
 import { parseMcpJson } from '../../parsers/mcp-json.js';
 import { loadConfig, toLintConfig } from '../../utils/config.js';
 import { buildSingleFileInventory } from '../../utils/single-file-inventory.js';
-import type { ConfigFileType } from '../../types/index.js';
+import type { ConfigFileType, LintResult, Severity } from '../../types/index.js';
 
 const FILE_TYPE_LABELS: Record<ConfigFileType, string> = {
   'claude-md': 'memory',
@@ -42,10 +42,12 @@ export function registerLintCommand(program: Command): void {
     .command('lint [target]')
     .description('Validate configuration against best practices')
     .option('-v, --verbose', 'Show expanded output with all issues and full evidence')
+    .option('--min-severity <level>', 'Minimum severity to display (error, warning, info)', 'info')
     .action(async (target: string | undefined, _options: unknown, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals();
       const format = globalOpts.format as string | undefined;
       const verbose = globalOpts.verbose as boolean | undefined;
+      const minSeverity = parseSeverity(globalOpts.minSeverity as string | undefined);
 
       // Determine if target is a file
       if (target) {
@@ -59,19 +61,19 @@ export function registerLintCommand(program: Command): void {
 
         if (statSync(resolvedTarget).isFile()) {
           // === SINGLE-FILE MODE ===
-          await runSingleFileMode(resolvedTarget, format, verbose);
+          await runSingleFileMode(resolvedTarget, format, verbose, minSeverity);
           return;
         }
 
         // Target is a directory — feed into the existing flow as projectDir
-        runDirectoryMode(resolvedTarget, globalOpts);
+        runDirectoryMode(resolvedTarget, globalOpts, minSeverity);
         return;
       }
 
       // === DIRECTORY MODE (existing code, unchanged) ===
       const projectDir = globalOpts.projectDir as string | undefined;
       const resolvedProjectDir = resolvePath(projectDir || process.cwd());
-      runDirectoryMode(resolvedProjectDir, globalOpts);
+      runDirectoryMode(resolvedProjectDir, globalOpts, minSeverity);
     });
 }
 
@@ -79,6 +81,7 @@ async function runSingleFileMode(
   absolutePath: string,
   format: string | undefined,
   verbose: boolean | undefined,
+  minSeverity: Severity,
 ): Promise<void> {
   let ctx;
   try {
@@ -109,6 +112,9 @@ async function runSingleFileMode(
   const label = FILE_TYPE_LABELS[ctx.fileType];
   const displayName = basename(ctx.filePath);
 
+  // Filter issues for display (stats remain unfiltered)
+  const filteredResult = filterResult(result, minSeverity);
+
   if (format === 'json') {
     const output: Record<string, unknown> = {
       singleFileMode: {
@@ -116,17 +122,17 @@ async function runSingleFileMode(
         type: ctx.fileType,
         label,
       },
-      ...result,
+      ...filteredResult,
     };
     console.log(JSON.stringify(output, null, 2));
   } else if (format === 'md') {
     const banner = `> **Single-file mode**: \`${displayName}\` (${label}) — cross-file rules skipped\n`;
-    console.log(banner + printLintResultMarkdown(result));
+    console.log(banner + printLintResultMarkdown(filteredResult));
   } else {
     console.log();
     console.log(chalk.bold.cyan(`⚡ Single-file mode: ${displayName} (${label})`));
     console.log(chalk.dim('  Cross-file and project-level rules skipped'));
-    printLintResult(result, { projectRoot: ctx.inventory.projectRoot, verbose });
+    printLintResult(filteredResult, { projectRoot: ctx.inventory.projectRoot, verbose, minSeverity });
   }
 
   if (result.stats.errors > 0) {
@@ -137,6 +143,7 @@ async function runSingleFileMode(
 function runDirectoryMode(
   resolvedProjectDir: string,
   globalOpts: Record<string, unknown>,
+  minSeverity: Severity,
 ): void {
   const format = globalOpts.format as string | undefined;
   const verbose = globalOpts.verbose as boolean | undefined;
@@ -189,16 +196,38 @@ function runDirectoryMode(
 
   const result = linter.run(inventory, resolved, lintConfig);
 
+  // Filter issues for display (stats remain unfiltered)
+  const filteredResult = filterResult(result, minSeverity);
+
   if (format === 'json') {
-    printLintResultJson(result);
+    printLintResultJson(filteredResult);
   } else if (format === 'md') {
-    console.log(printLintResultMarkdown(result));
+    console.log(printLintResultMarkdown(filteredResult));
   } else {
-    printLintResult(result, { projectRoot: resolvedProjectDir, verbose });
+    printLintResult(filteredResult, { projectRoot: resolvedProjectDir, verbose, minSeverity });
   }
 
-  // Exit with non-zero if there are errors
+  // Exit code based on unfiltered results
   if (result.stats.errors > 0) {
     process.exitCode = 1;
   }
+}
+
+// ---- Severity filtering helpers ----
+
+const SEVERITY_LEVELS: Record<Severity, number> = { error: 2, warning: 1, info: 0 };
+
+function parseSeverity(value: string | undefined): Severity {
+  if (value === 'error' || value === 'warning' || value === 'info') return value;
+  return 'info';
+}
+
+/** Filter issues by minimum severity. Stats reflect original (unfiltered) counts. */
+function filterResult(result: LintResult, minSeverity: Severity): LintResult {
+  if (minSeverity === 'info') return result; // no filtering needed
+  const minLevel = SEVERITY_LEVELS[minSeverity];
+  return {
+    issues: result.issues.filter((i) => SEVERITY_LEVELS[i.severity] >= minLevel),
+    stats: result.stats, // original counts preserved
+  };
 }

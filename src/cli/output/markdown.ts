@@ -41,16 +41,19 @@ export function printLintResultMarkdown(result: LintResult): string {
   lines.push('## Summary');
   lines.push('');
 
-  const parts: string[] = [];
-  if (result.stats.errors > 0) parts.push(`${result.stats.errors} error(s)`);
-  if (result.stats.warnings > 0) parts.push(`${result.stats.warnings} warning(s)`);
-  if (result.stats.infos > 0) parts.push(`${result.stats.infos} info(s)`);
-  if (parts.length === 0) parts.push('0 issues');
+  const { errors, warnings, infos } = result.stats;
+  const headlineParts: string[] = [];
+  if (errors > 0) headlineParts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+  if (warnings > 0) headlineParts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+  const headline = headlineParts.length > 0 ? headlineParts.join(', ') : 'No issues found';
 
-  lines.push(`- **Issues:** ${parts.join(', ')}`);
+  lines.push(`- **Issues:** ${headline}`);
   lines.push(`- **Rules checked:** ${result.stats.rulesRun}`);
   lines.push(`- **Files scanned:** ${result.stats.filesChecked}`);
   lines.push(`- **Duration:** ${result.stats.duration}ms`);
+  if (infos > 0) {
+    lines.push(`- **Notes:** ${infos}`);
+  }
   lines.push('');
 
   return lines.join('\n');

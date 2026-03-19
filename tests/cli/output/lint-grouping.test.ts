@@ -55,9 +55,9 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    expect(output).toContain('Memory (1 issue)');
-    expect(output).toContain('Settings (1 issue)');
-    expect(output).toContain('Rules (1 issue)');
+    expect(output).toContain('Memory (1 warning)');
+    expect(output).toContain('Settings (1 warning)');
+    expect(output).toContain('Rules (1 warning)');
   });
 
   it('uses plural "issues" for counts > 1', () => {
@@ -67,7 +67,7 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    expect(output).toContain('Memory (2 issues)');
+    expect(output).toContain('Memory (2 warnings)');
   });
 
   it('sorts issues within each group by severity (error → warning → info)', () => {
@@ -93,9 +93,9 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    const memoryPos = output.indexOf('Memory (1 issue)');
-    const settingsPos = output.indexOf('Settings (1 issue)');
-    const gitPos = output.indexOf('Git (1 issue)');
+    const memoryPos = output.indexOf('Memory (1 warning)');
+    const settingsPos = output.indexOf('Settings (1 warning)');
+    const gitPos = output.indexOf('Git (1 warning)');
     expect(memoryPos).toBeLessThan(settingsPos);
     expect(settingsPos).toBeLessThan(gitPos);
   });
@@ -107,8 +107,8 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    expect(output).toContain('Memory (1 issue)');
-    expect(output).toContain('Git (1 issue)');
+    expect(output).toContain('Memory (1 warning)');
+    expect(output).toContain('Git (1 warning)');
     expect(output).not.toContain('Settings (');
     expect(output).not.toContain('Rules (');
     expect(output).not.toContain('Agents (');
@@ -129,7 +129,7 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    expect(output).toContain('unknown-cat (1 issue)');
+    expect(output).toContain('unknown-cat (1 warning)');
   });
 
   it('preserves per-issue rendering (icon, suggestion, rule ID)', () => {
@@ -157,8 +157,8 @@ describe('lint output category grouping', () => {
     ]);
     printLintResult(result);
 
-    expect(output).toContain('1 warning(s)');
-    expect(output).toContain('1 info(s)');
+    expect(output).toContain('1 warning');
+    expect(output).toContain('+ 1 note');
     expect(output).toContain('5 rules checked');
     expect(output).toContain('3 files scanned');
     expect(output).toContain('42ms');
@@ -499,8 +499,8 @@ describe('lint output collapsed groups', () => {
     expect(output).toContain('[settings/deny-sensitive-paths]');
     // Should NOT show individual messages
     expect(output).not.toContain('No deny rule protects SSH');
-    // Category header should show original count
-    expect(output).toContain('Settings (4 issues)');
+    // Category header should show original count (as notes since all are info)
+    expect(output).toContain('Settings (4 notes)');
   });
 
   it('collapses todo-fixme into one block with line numbers', () => {
@@ -785,7 +785,7 @@ describe('lint output collapsed groups', () => {
     printLintResult(result);
 
     // 4 issues total in settings, even though 3 are collapsed into 1 block
-    expect(output).toContain('Settings (4 issues)');
+    expect(output).toContain('Settings (1 warning, 3 notes)');
   });
 
   it('renders collapsed and individual issues in same category', () => {
@@ -934,8 +934,8 @@ describe('lint output collapsed groups', () => {
     printLintResult(result);
 
     // Footer should show original counts, not collapsed counts
-    expect(output).toContain('2 warning(s)');
-    expect(output).toContain('2 info(s)');
+    expect(output).toContain('2 warnings');
+    expect(output).toContain('+ 2 notes');
   });
 });
 
@@ -1314,8 +1314,158 @@ describe('lint output verbose mode', () => {
     ]);
     printLintResult(result, { verbose: true });
 
-    expect(output).toContain('2 warning(s)');
+    expect(output).toContain('2 warnings');
     expect(output).toContain('5 rules checked');
     expect(output).toContain('Most affected: .claude/settings.json (2)');
+  });
+});
+
+// ─── Summary format tests (issues vs notes split) ───
+
+describe('lint output summary format', () => {
+  let output: string;
+
+  beforeEach(() => {
+    output = '';
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      output += args.map(String).join(' ') + '\n';
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows warnings headline + notes line for mixed output', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'warning', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('1 warning |');
+    expect(output).toContain('+ 2 notes');
+    expect(output).not.toContain('info');
+  });
+
+  it('shows "No issues found" when only infos present', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'info', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('No issues found |');
+    expect(output).toContain('+ 2 notes');
+  });
+
+  it('shows clean output with no notes line when zero issues', () => {
+    const result = makeResult([]);
+    printLintResult(result);
+
+    expect(output).toContain('No issues found |');
+    expect(output).not.toContain('+ ');
+    expect(output).not.toContain('notes');
+  });
+
+  it('shows errors and warnings in headline', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'error', category: 'memory' }),
+      makeIssue({ severity: 'error', category: 'memory' }),
+      makeIssue({ severity: 'warning', category: 'settings' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('2 errors');
+    expect(output).toContain('1 warning');
+    expect(output).toContain('+ 1 note');
+  });
+
+  it('uses correct singular forms', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'error', category: 'memory' }),
+      makeIssue({ severity: 'warning', category: 'settings' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('1 error');
+    expect(output).not.toContain('1 errors');
+    expect(output).toContain('1 warning');
+    expect(output).not.toContain('1 warnings');
+    expect(output).toContain('+ 1 note');
+    expect(output).not.toContain('1 notes');
+  });
+
+  it('section headers show split counts', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'warning', category: 'settings', ruleId: 'settings/a' }),
+      makeIssue({ severity: 'info', category: 'settings', ruleId: 'settings/b' }),
+      makeIssue({ severity: 'info', category: 'settings', ruleId: 'settings/c' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('Settings (1 warning, 2 notes)');
+  });
+
+  it('section header shows only notes when all info', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'info', category: 'memory', ruleId: 'memory/a' }),
+      makeIssue({ severity: 'info', category: 'memory', ruleId: 'memory/b' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('Memory (2 notes)');
+  });
+
+  it('section header shows only warnings when no info', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'warning', category: 'memory', ruleId: 'memory/a' }),
+    ]);
+    printLintResult(result);
+
+    expect(output).toContain('Memory (1 warning)');
+  });
+
+  it('shows suppression notice when minSeverity hides infos', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'warning', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result, { minSeverity: 'warning' });
+
+    expect(output).toContain('(2 notes hidden');
+    expect(output).toContain('--min-severity info to show');
+    expect(output).not.toContain('+ 2 notes');
+  });
+
+  it('shows suppression notice for both warnings and notes when minSeverity is error', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'error', category: 'memory' }),
+      makeIssue({ severity: 'warning', category: 'settings' }),
+      makeIssue({ severity: 'warning', category: 'settings' }),
+      makeIssue({ severity: 'info', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'memory' }),
+    ]);
+    printLintResult(result, { minSeverity: 'error' });
+
+    expect(output).toContain('2 warnings');
+    expect(output).toContain('3 notes hidden');
+    expect(output).toContain('--min-severity info to show');
+  });
+
+  it('no suppression notice when minSeverity is info (default)', () => {
+    const result = makeResult([
+      makeIssue({ severity: 'warning', category: 'memory' }),
+      makeIssue({ severity: 'info', category: 'settings' }),
+    ]);
+    printLintResult(result, { minSeverity: 'info' });
+
+    expect(output).toContain('+ 1 note');
+    expect(output).not.toContain('hidden');
   });
 });

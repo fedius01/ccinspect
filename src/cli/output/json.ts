@@ -10,5 +10,12 @@ export function printRuntimeInfoJson(info: RuntimeInfo): void {
 }
 
 export function printLintResultJson(result: LintResult): void {
-  console.log(JSON.stringify(result, null, 2));
+  const output = {
+    ...result,
+    stats: {
+      ...result.stats,
+      notes: result.stats.infos,
+    },
+  };
+  console.log(JSON.stringify(output, null, 2));
 }

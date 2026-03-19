@@ -512,6 +512,26 @@ const CATEGORY_ORDER: Array<{ key: string; label: string }> = [
 
 const SEVERITY_ORDER: Record<string, number> = { error: 0, warning: 1, info: 2 };
 
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+type LintIssueItem = LintResult['issues'][number];
+
+/** Format section header count: split issues (errors+warnings) from notes (info). */
+function formatSectionCount(issues: LintIssueItem[]): string {
+  const errorCount = issues.filter((i) => i.severity === 'error').length;
+  const warnCount = issues.filter((i) => i.severity === 'warning').length;
+  const infoCount = issues.filter((i) => i.severity === 'info').length;
+
+  const parts: string[] = [];
+  if (errorCount > 0) parts.push(plural(errorCount, 'error', 'errors'));
+  if (warnCount > 0) parts.push(plural(warnCount, 'warning', 'warnings'));
+  if (infoCount > 0) parts.push(plural(infoCount, 'note', 'notes'));
+  if (parts.length === 0) return '0 issues';
+  return parts.join(', ');
+}
+
 /**
  * Rules that should be collapsed when 2+ issues share the same ruleId.
  * Each entry defines how to render the collapsed group.
@@ -528,8 +548,6 @@ const COLLAPSIBLE_RULES = new Set([
   'agents/frontmatter-present',
   'skills/frontmatter-present',
 ]);
-
-type LintIssueItem = LintResult['issues'][number];
 
 /**
  * Group same-ruleId issues for collapsed rendering.
@@ -855,6 +873,8 @@ function renderIssueGroup(issues: LintResult['issues'], projectRoot: string, ver
 interface PrintLintOptions {
   projectRoot?: string;
   verbose?: boolean;
+  /** When set, issues below this severity were filtered out before rendering. */
+  minSeverity?: 'error' | 'warning' | 'info';
 }
 
 export function printLintResult(result: LintResult, opts?: PrintLintOptions): void {
@@ -869,8 +889,7 @@ export function printLintResult(result: LintResult, opts?: PrintLintOptions): vo
     console.log(chalk.green('\u2713 No issues found. Configuration looks good!'));
   } else {
     // Group by category
-    type IssueItem = LintResult['issues'][number];
-    const grouped = new Map<string, IssueItem[]>();
+    const grouped = new Map<string, LintIssueItem[]>();
     for (const issue of result.issues) {
       const cat = issue.category;
       if (!grouped.has(cat)) grouped.set(cat, []);
@@ -889,8 +908,7 @@ export function printLintResult(result: LintResult, opts?: PrintLintOptions): vo
       const issues = grouped.get(key);
       if (!issues || issues.length === 0) continue;
 
-      const issueWord = issues.length === 1 ? 'issue' : 'issues';
-      console.log(chalk.bold(`${label} (${issues.length} ${issueWord})`));
+      console.log(chalk.bold(`${label} (${formatSectionCount(issues)})`));
       console.log();
       renderIssueGroup(issues, projectRoot, verbose);
     }
@@ -898,8 +916,8 @@ export function printLintResult(result: LintResult, opts?: PrintLintOptions): vo
     // Catch any categories not in CATEGORY_ORDER (defensive)
     for (const [cat, issues] of grouped) {
       if (CATEGORY_ORDER.some((c) => c.key === cat)) continue;
-      const issueWord = issues.length === 1 ? 'issue' : 'issues';
-      console.log(chalk.bold(`${cat} (${issues.length} ${issueWord})`));
+
+      console.log(chalk.bold(`${cat} (${formatSectionCount(issues)})`));
       console.log();
       renderIssueGroup(issues, projectRoot, verbose);
     }
@@ -907,14 +925,20 @@ export function printLintResult(result: LintResult, opts?: PrintLintOptions): vo
 
   // Summary
   console.log(chalk.gray('-'.repeat(60)));
-  const parts: string[] = [];
-  if (result.stats.errors > 0) parts.push(chalk.red(`${result.stats.errors} error(s)`));
-  if (result.stats.warnings > 0) parts.push(chalk.yellow(`${result.stats.warnings} warning(s)`));
-  if (result.stats.infos > 0) parts.push(chalk.blue(`${result.stats.infos} info(s)`));
-  if (parts.length === 0) parts.push(chalk.green('0 issues'));
+
+  const { errors, warnings, infos } = result.stats;
+  const minSeverity = opts?.minSeverity ?? 'info';
+
+  // Headline: only errors + warnings
+  const headlineParts: string[] = [];
+  if (errors > 0) headlineParts.push(chalk.red(plural(errors, 'error', 'errors')));
+  if (warnings > 0) headlineParts.push(chalk.yellow(plural(warnings, 'warning', 'warnings')));
+  const headline = headlineParts.length > 0
+    ? headlineParts.join(', ')
+    : chalk.green('No issues found');
 
   console.log(
-    `${parts.join(', ')} | ${result.stats.rulesRun} rules checked | ${result.stats.filesChecked} files scanned | ${result.stats.duration}ms`,
+    `${headline} | ${result.stats.rulesRun} rules checked | ${result.stats.filesChecked} files scanned | ${result.stats.duration}ms`,
   );
 
   // Most affected files
@@ -942,6 +966,19 @@ export function printLintResult(result: LintResult, opts?: PrintLintOptions): vo
   if (top.length > 0) {
     const fileParts = top.map(([file, count]) => `${file} (${count})`);
     console.log(chalk.gray(`Most affected: ${fileParts.join(', ')}`));
+  }
+
+  // Notes line or suppression notice
+  if (minSeverity !== 'info' && infos > 0) {
+    // Filtering is active and there are hidden notes
+    const hiddenParts: string[] = [];
+    if (minSeverity === 'error' && warnings > 0) {
+      hiddenParts.push(plural(warnings, 'warning', 'warnings'));
+    }
+    hiddenParts.push(plural(infos, 'note', 'notes'));
+    console.log(chalk.dim(`(${hiddenParts.join(', ')} hidden — use --min-severity info to show)`));
+  } else if (infos > 0) {
+    console.log(chalk.dim(`+ ${plural(infos, 'note', 'notes')}`));
   }
 
   console.log();
