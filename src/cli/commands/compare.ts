@@ -9,6 +9,8 @@ import { createExcluder } from '../../utils/excluder.js';
 import { parseSettingsJson } from '../../parsers/settings-json.js';
 import { parseMcpJson } from '../../parsers/mcp-json.js';
 import { printComparison, printComparisonJson } from '../output/terminal.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
+import { loadConfig } from '../../utils/config.js';
 
 export interface ProjectComparison {
   dir: string;
@@ -17,10 +19,14 @@ export interface ProjectComparison {
   totalStartupTokens: number;
 }
 
-function scanAndResolve(projectDir: string, cliPatterns: string[] = []): ProjectComparison {
+async function scanAndResolve(projectDir: string, cliPatterns: string[] = []): Promise<ProjectComparison> {
   const resolvedProjectDir = resolvePath(projectDir);
   const excluder = createExcluder(resolvedProjectDir, { cliPatterns });
   const inventory = scan({ projectDir, excluder });
+
+  // Run history reconstruction (non-blocking — errors are swallowed internally)
+  const config = loadConfig(resolvedProjectDir);
+  await runHistoryReconstruction(resolvedProjectDir, inventory, 'compare', config.history);
 
   const layers: ParsedConfigLayers = {
     userSettings: inventory.userSettings?.exists
@@ -58,7 +64,7 @@ export function registerCompareCommand(program: Command): void {
     .command('compare')
     .description('Compare configurations across multiple projects')
     .argument('<dirs...>', 'Two or more project directories to compare')
-    .action((dirs: string[], _options, cmd) => {
+    .action(async (dirs: string[], _options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const format = globalOpts.format as string | undefined;
 
@@ -78,7 +84,7 @@ export function registerCompareCommand(program: Command): void {
       }
 
       const cliPatterns: string[] = globalOpts.exclude ?? [];
-      const results = dirs.map((dir) => scanAndResolve(dir, cliPatterns));
+      const results = await Promise.all(dirs.map((dir) => scanAndResolve(dir, cliPatterns)));
 
       if (format === 'json') {
         printComparisonJson(results);

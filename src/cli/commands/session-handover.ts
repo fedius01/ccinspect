@@ -5,6 +5,9 @@ import { generateHandover } from '../../core/session-handover.js';
 import type { HandoverConfig } from '../../core/session-handover.js';
 import { renderHandover } from '../../core/session-handover-renderer.js';
 import { loadConfig } from '../../utils/config.js';
+import { scan } from '../../core/scanner.js';
+import { createExcluder } from '../../utils/excluder.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
 
 export function registerSessionHandoverCommand(program: Command): void {
   program
@@ -35,6 +38,13 @@ export function registerSessionHandoverCommand(program: Command): void {
       // Load .ccinspect.json config
       const ccinspectConfig = loadConfig(resolvedProjectDir);
       const handoverSection = ccinspectConfig.sessionHandover;
+
+      // Run history reconstruction (non-blocking — errors are swallowed internally)
+      const excluder = createExcluder(resolvedProjectDir, {
+        cliPatterns: (globalOpts.exclude as string[] | undefined) ?? [],
+      });
+      const inventory = scan({ projectDir: resolvedProjectDir, excluder });
+      await runHistoryReconstruction(resolvedProjectDir, inventory, 'session-handover', ccinspectConfig.history);
 
       // Build config: CLI flags > .ccinspect.json > defaults
       // --session implies --transcript

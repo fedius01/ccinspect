@@ -13,6 +13,7 @@ import { resolve } from '../../core/resolver.js';
 import { Linter } from '../../core/linter.js';
 import { getAllRules } from '../../rules/index.js';
 import { loadConfig } from '../../utils/config.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
 import { analyzeFileHeatmap } from '../../core/transcript-file-heatmap.js';
 import { shortenPath } from '../output/terminal.js';
 import type {
@@ -53,6 +54,10 @@ export function registerAuditCommand(program: Command): void {
 
       // 1. Scan current project config
       const inventory = scan({ projectDir: resolvedProjectDir });
+
+      // 1b. Run history reconstruction (non-blocking — errors are swallowed internally)
+      const ccinspectConfig = loadConfig(resolvedProjectDir);
+      await runHistoryReconstruction(resolvedProjectDir, inventory, 'audit', ccinspectConfig.history);
 
       // 2. Analyze transcripts (with raw parse results for compliance checking)
       const { stats, parseResults } = await analyzeTranscriptsWithResults({

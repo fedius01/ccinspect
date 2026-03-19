@@ -5,13 +5,15 @@ import { scan } from '../../core/scanner.js';
 import { createExcluder } from '../../utils/excluder.js';
 import { printInventory } from '../output/terminal.js';
 import { printInventoryJson } from '../output/json.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
+import { loadConfig } from '../../utils/config.js';
 
 export function registerScanCommand(program: Command): void {
   program
     .command('scan')
     .description('Discover all Claude Code configuration files and show inventory')
     .option('--all', 'Include config files that don\'t exist yet')
-    .action((_options, cmd) => {
+    .action(async (_options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const projectDir = globalOpts.projectDir as string | undefined;
       const format = globalOpts.format as string | undefined;
@@ -29,6 +31,10 @@ export function registerScanCommand(program: Command): void {
       });
 
       const inventory = scan({ projectDir, excluder, includeNonExistent: all ?? false });
+
+      // Run history reconstruction (non-blocking — errors are swallowed internally)
+      const config = loadConfig(resolvedProjectDir);
+      await runHistoryReconstruction(resolvedProjectDir, inventory, 'scan', config.history);
 
       if (format === 'json') {
         printInventoryJson(inventory);

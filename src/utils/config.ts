@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getHomeDir } from './os-paths.js';
-import type { Severity, LintConfig } from '../types/index.js';
+import type { Severity, LintConfig, HistoryConfig } from '../types/index.js';
 
 export interface RuleOptions {
   enabled: boolean;
@@ -19,6 +19,7 @@ export interface SessionHandoverConfig {
 export interface CcinspectConfig {
   rules: Record<string, RuleOptions>;
   sessionHandover?: SessionHandoverConfig;
+  history?: HistoryConfig;
 }
 
 function readJsonFile(filePath: string): Record<string, unknown> | null {
@@ -98,7 +99,21 @@ export function loadConfig(projectRoot: string): CcinspectConfig {
     ? { ...userHandover, ...projectHandover }
     : undefined;
 
-  return { rules, sessionHandover };
+  // Merge history config: project overrides user
+  const userHistory = (userRaw?.history as HistoryConfig | undefined) ?? undefined;
+  const projectHistory = (projectRaw?.history as HistoryConfig | undefined) ?? undefined;
+  const history = userHistory || projectHistory
+    ? {
+        ...userHistory,
+        ...projectHistory,
+        sources: {
+          ...userHistory?.sources,
+          ...projectHistory?.sources,
+        },
+      }
+    : undefined;
+
+  return { rules, sessionHandover, history };
 }
 
 /**

@@ -4,6 +4,8 @@ import { existsSync, statSync, writeFileSync } from 'fs';
 import { scan } from '../../core/scanner.js';
 import { buildDependencyGraph } from '../../core/graph-builder.js';
 import { createExcluder } from '../../utils/excluder.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
+import { loadConfig } from '../../utils/config.js';
 import {
   formatGraphMermaid,
   formatGraphHtml,
@@ -20,7 +22,7 @@ export function registerGraphCommand(program: Command): void {
     .description('Visualize configuration dependency graph')
     .option('--format <format>', `Output format: ${VALID_FORMATS.join(', ')}`, 'text')
     .option('-o, --output <file>', 'Write output to file instead of stdout')
-    .action((options, cmd) => {
+    .action(async (options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const projectDir = globalOpts.projectDir as string | undefined;
       const outputFile = options.output as string | undefined;
@@ -59,6 +61,11 @@ export function registerGraphCommand(program: Command): void {
       });
 
       const inventory = scan({ projectDir, excluder });
+
+      // Run history reconstruction
+      const graphConfig = loadConfig(resolvedProjectDir);
+      await runHistoryReconstruction(resolvedProjectDir, inventory, 'graph', graphConfig.history);
+
       const graph = buildDependencyGraph(inventory, resolvedProjectDir);
 
       let output: string;

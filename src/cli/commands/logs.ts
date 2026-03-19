@@ -4,6 +4,8 @@ import chalk from 'chalk';
 import type { AggregateStats, FileActivity, TokenEconomicsReport } from '../../types/transcript.js';
 import { analyzeTranscriptsWithResults, analyzeTokenEconomics } from '../../core/transcript-analyzer.js';
 import { scan } from '../../core/scanner.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
+import { loadConfig } from '../../utils/config.js';
 import { shortenPath } from '../output/terminal.js';
 
 export function registerLogsCommand(program: Command): void {
@@ -40,6 +42,8 @@ export function registerLogsCommand(program: Command): void {
         let estimatedStartup = 0;
         try {
           const inventory = scan({ projectDir: resolvedProjectDir });
+          const logsConfig = loadConfig(resolvedProjectDir);
+          await runHistoryReconstruction(resolvedProjectDir, inventory, 'logs-stats', logsConfig.history);
           estimatedStartup = inventory.totalStartupTokens;
         } catch {
           // Scanner failure is non-fatal for cost analysis

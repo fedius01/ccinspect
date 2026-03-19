@@ -67,6 +67,22 @@ export type {
   TokenEconomicsReport,
 } from './transcript.js';
 
+export type {
+  ConfigFileSnapshot,
+  GitCommitInfo,
+  ConfigVersion,
+  HistoryEntry,
+  ReconstructionCache,
+  GitConfigCommit,
+  HistoryOptions,
+  HistoryConfig,
+  TranscriptConfigChange,
+  DiffLine,
+  DiffHunk,
+  FileDiff,
+  DiffResult,
+} from './history.js';
+
 import type { FileScope, ConfigInventory as CI } from './inventory.js';
 import type { ResolvedConfig as RC } from './resolved.js';
 

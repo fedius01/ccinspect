@@ -13,6 +13,9 @@ import { registerGraphCommand } from './commands/graph.js';
 import { registerLogsCommand } from './commands/logs.js';
 import { registerAuditCommand } from './commands/audit.js';
 import { registerSessionRecoverCommand } from './commands/session-recover.js';
+import { registerHistoryCommand } from './commands/history.js';
+import { registerDiffCommand } from './commands/diff.js';
+import { registerRestoreCommand } from './commands/restore.js';
 
 declare const PKG_VERSION: string | undefined;
 
@@ -46,6 +49,9 @@ registerGraphCommand(program);
 registerLogsCommand(program);
 registerAuditCommand(program);
 registerSessionRecoverCommand(program);
+registerHistoryCommand(program);
+registerDiffCommand(program);
+registerRestoreCommand(program);
 
 // Deprecated alias: resolve → blame
 program

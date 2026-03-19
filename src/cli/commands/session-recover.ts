@@ -4,6 +4,10 @@ import chalk from 'chalk';
 import { discoverTranscripts } from '../../utils/transcript-discovery.js';
 import { parseTranscriptFile } from '../../parsers/transcript-jsonl.js';
 import { assessRecovery, type RecoveryAssessment } from '../../core/session-recovery.js';
+import { scan } from '../../core/scanner.js';
+import { createExcluder } from '../../utils/excluder.js';
+import { loadConfig } from '../../utils/config.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
 
 export function registerSessionRecoverCommand(program: Command): void {
   program
@@ -18,6 +22,14 @@ export function registerSessionRecoverCommand(program: Command): void {
       const sessionId = _options.session as string | undefined;
 
       const resolvedProjectDir = resolvePath(projectDir || process.cwd());
+
+      // Run history reconstruction (non-blocking — errors are swallowed internally)
+      const excluder = createExcluder(resolvedProjectDir, {
+        cliPatterns: (globalOpts.exclude as string[] | undefined) ?? [],
+      });
+      const inventory = scan({ projectDir: resolvedProjectDir, excluder });
+      const ccinspectConfig = loadConfig(resolvedProjectDir);
+      await runHistoryReconstruction(resolvedProjectDir, inventory, 'session-recover', ccinspectConfig.history);
 
       // 1. Discover transcripts
       const discovery = await discoverTranscripts(resolvedProjectDir);

@@ -6,11 +6,11 @@
 
 A CLI tool that inspects, validates, and visualizes Claude Code configurations across all layers (enterprise, user, project-shared, project-local) — and cross-references them against actual runtime behavior.
 
-Scan · Lint · Blame · Audit · Recover
+Scan · Lint · Blame · Audit · History · Diff · Restore · Recover
 
 [![npm](https://img.shields.io/npm/v/ccinspect)](https://www.npmjs.com/package/ccinspect)
 [![license](https://img.shields.io/npm/l/ccinspect)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-1233%2B%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-1500%2B%20passing-brightgreen)]()
 
 <br>
 <img src="documentation/assets/demo.gif" alt="ccinspect demo" width="720">
@@ -36,7 +36,7 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 **ccinspect** fixes that with next capabilities:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status
-🧹 **Lint** — runs 43 rules catching security gaps, dead references, conflicts, and bloat
+🧹 **Lint** — runs 51 rules catching security gaps, dead references, conflicts, and bloat
 📋 **Evidence** — see exactly which lines triggered each detection
 🔗 **Blame** — shows the effective config after all layers merge, with origin tracking and precedence badges
 ⚖️ **Compare** — diffs configurations across projects side-by-side
@@ -44,6 +44,8 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 🔬 **Audit** — cross-references your config against actual Claude Code runtime behavior
 🩺 **Diagnose** — detects write-blindness, ghost agents, orphan confirmations, unused config
 💰 **Economics** — token usage, cache efficiency, API-equivalent cost per session
+📜 **History** — reconstructs config change timeline from git, transcripts, and disk — zero installation
+🔀 **Diff & Restore** — compare any two config versions and roll back with lineage-aware ancestry
 🔄 **Recover** — generates a paste-ready recovery prompt from interrupted sessions
 
 > Fully offline. No API keys. No hooks to install. Just point it at a project.
@@ -120,11 +122,29 @@ cci session-recover
 
 > Fully offline. Reads Claude Code's existing session data. No hooks to install.
 
+## Config versioning
+
+```bash
+# See full config change history (from git, transcripts, and disk)
+cci history CLAUDE.md
+
+# Compare any two versions
+cci diff v3 v8 CLAUDE.md
+
+# Compare a version to current disk state
+cci diff v5 current .claude/settings.json
+
+# Roll back to a previous version
+cci restore v3 CLAUDE.md
+```
+
+> Zero installation. Reconstructs history retroactively from git commits and Claude Code session transcripts on first run.
+
 ## Which command do I need?
 
 **`cci scan`** — *"What do I have?"* — Discovers every config file across all scopes, shows sizes, token counts, and git status. Flags when a user-level file is shadowed by a project-level equivalent. Doesn't look inside files — just the inventory.
 
-**`cci lint`** — *"What's wrong?"* — Runs 43 rules checking for dead globs, contradictions, dangerous permissions, oversized files, stale imports, and more. The quality gate.
+**`cci lint`** — *"What's wrong?"* — Runs 51 rules checking for dead globs, contradictions, dangerous permissions, oversized files, stale imports, and more. The quality gate.
 
 **`cci blame`** — *"What's actually in effect?"* — After all layers merge, shows which permissions apply, which env vars win, which MCP servers are active — and which file is responsible. The answer to "I set X but it's not working."
 
@@ -138,6 +158,12 @@ cci session-recover
 
 **`cci session-recover`** — *"My session crashed. What was I doing?"* — Parses the last session to extract the task in progress, files modified, last successful checkpoint, and any errors. Generates a paste-ready recovery prompt to continue in a new session.
 
+**`cci history`** — *"What changed and when?"* — Reconstructs config change history from git commits, Claude Code transcript edits, and disk state. Shows a git-log-style timeline with source badges, lineage tracking, and token counts. Zero installation — full history on first run.
+
+**`cci diff`** — *"What's different between two versions?"* — Colored unified diff between any two config versions, including `current` disk state.
+
+**`cci restore`** — *"Take me back."* — Roll back a config file to any previous version with lineage-aware ancestry. Creates a safety snapshot before writing — nothing is ever lost.
+
 **`cci session-handover`** — *"Bring a new session up to speed."* — Generates a status summary from git diff, test results, and typecheck. Add `--transcript` for task narrative, tool usage, and git correlation from the previous session.
 
 ## Commands
@@ -145,7 +171,7 @@ cci session-recover
 | Command | Description |
 |---------|-------------|
 | `cci scan` | Discover and inventory all config files with sizes, token counts, and git status. Use `--all` to include config locations that don't exist yet |
-| `cci lint [target]` | Run 43 rules — pass a directory or a single config file |
+| `cci lint [target]` | Run 51 rules — pass a directory or a single config file |
 | `cci blame` | Show effective config after all layers merge, with origin tracking |
 | `cci blame settings` | Show raw settings key-value pairs with source badges |
 | `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
@@ -154,6 +180,9 @@ cci session-recover
 | `cci graph` | Visualize config dependency graph — text, mermaid, HTML, or JSON output |
 | `cci audit` | Config utilization audit — which config was actually used at runtime |
 | `cci logs stats [--cost]` | Session statistics and token economics from transcript data |
+| `cci history [path]` | Show config version timeline — git-log style with source badges and lineage |
+| `cci diff <v1> <v2> [path]` | Compare two config versions with colored unified diff |
+| `cci restore <version> [path]` | Roll back config to a previous version with safety snapshot |
 | `cci session-recover` | Generate a recovery prompt from the last interrupted session |
 
 > **Scan output:** When a user-global agent, skill, or command is shadowed by a project-level equivalent of the same name, `cci scan` dims the entry and marks it `(inactive)` — so you can see why a global config isn't taking effect.
@@ -218,12 +247,12 @@ This is **write-blindness**: path-scoped rules only load when Claude Reads a mat
 | `memory` | 9 | CLAUDE.md quality — size, token budget, imports, sections, stale refs, TODOs |
 | `settings` | 9 | Permission security, dangerous allows, field validation, sandbox config |
 | `cross-level` | 4 | Conflicts across config layers — permissions, env vars, MCP, plugins |
-| `rules-dir` | 6 | Rule file quality — dead globs, overlaps, frontmatter, contradictions, empty/large files |
+| `rules-dir` | 7 | Rule file quality — dead globs, overlaps, frontmatter, contradictions, empty/large files, overly-broad globs |
 | `agents` | 5 | Agent frontmatter, skill references, description overlap, orphan detection |
-| `skills` | 4 | Skill frontmatter, agent references, orphan detection |
-| `commands` | 1 | Command definition frontmatter validity |
+| `skills` | 9 | Skill frontmatter, agent references, orphan detection, symlinks, typos, size, naming, descriptions |
+| `commands` | 2 | Command frontmatter validity, migration advisory to skills |
 | `budget` | 1 | Startup token budget estimation |
-| `mcp` | 1 | MCP server environment variable validation |
+| `mcp` | 2 | MCP server environment variable validation, deprecated SSE transport |
 | `git` | 1 | Local-only files accidentally tracked in git |
 | `plugins` | 1 | Plugin references point to installed plugins |
 | `naming` | 1 | Config file casing — detects files Claude Code won't recognize |
@@ -285,7 +314,7 @@ src/
   rules/      Individual lint rules by category
   types/      Shared TypeScript interfaces
   utils/      Token counting, git helpers, OS paths, transcript discovery
-tests/        Vitest test suite (1200+ tests)
+tests/        Vitest test suite (1500+ tests)
 documentation/         Configuration
 ```
 

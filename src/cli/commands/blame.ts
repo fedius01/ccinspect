@@ -17,6 +17,8 @@ import {
   printBlameSettingsJson,
 } from '../output/terminal.js';
 import type { RawSettingsLayer } from '../output/terminal.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
+import { loadConfig } from '../../utils/config.js';
 
 interface BlameOptions {
   permissions?: boolean;
@@ -28,7 +30,7 @@ interface BlameOptions {
   verbose?: boolean;
 }
 
-export function runBlame(options: BlameOptions, cmd: Command): void {
+export async function runBlame(options: BlameOptions, cmd: Command): Promise<void> {
   const globalOpts = cmd.optsWithGlobals();
   const projectDir = globalOpts.projectDir as string | undefined;
   const format = globalOpts.format as string | undefined;
@@ -46,6 +48,10 @@ export function runBlame(options: BlameOptions, cmd: Command): void {
   });
 
   const inventory = scan({ projectDir, excluder });
+
+  // Run history reconstruction
+  const ccinspectConfig = loadConfig(resolvedProjectDir);
+  await runHistoryReconstruction(resolvedProjectDir, inventory, 'blame', ccinspectConfig.history);
 
   const layers: ParsedConfigLayers = {
     userSettings: inventory.userSettings?.exists
@@ -117,7 +123,7 @@ function readRawSettingsLayers(inventory: ConfigInventory): RawSettingsLayer[] {
   return layers;
 }
 
-function runBlameSettings(options: BlameOptions, cmd: Command): void {
+async function runBlameSettings(options: BlameOptions, cmd: Command): Promise<void> {
   const globalOpts = cmd.optsWithGlobals();
   const projectDir = globalOpts.projectDir as string | undefined;
   const format = globalOpts.format as string | undefined;
@@ -136,6 +142,10 @@ function runBlameSettings(options: BlameOptions, cmd: Command): void {
   });
 
   const inventory = scan({ projectDir, excluder });
+
+  // Run history reconstruction
+  const blameConfig = loadConfig(resolvedProjectDir);
+  await runHistoryReconstruction(resolvedProjectDir, inventory, 'blame-settings', blameConfig.history);
 
   const rawLayers = readRawSettingsLayers(inventory);
   const { badgeMap, legend } = buildSourceLegend(inventory, resolvedProjectDir);

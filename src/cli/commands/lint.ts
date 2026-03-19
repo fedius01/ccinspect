@@ -15,6 +15,7 @@ import { parseSettingsJson } from '../../parsers/settings-json.js';
 import { parseMcpJson } from '../../parsers/mcp-json.js';
 import { loadConfig, toLintConfig } from '../../utils/config.js';
 import { buildSingleFileInventory } from '../../utils/single-file-inventory.js';
+import { runHistoryReconstruction } from '../../core/history-integration.js';
 import type { ConfigFileType, LintResult, Severity } from '../../types/index.js';
 
 const FILE_TYPE_LABELS: Record<ConfigFileType, string> = {
@@ -140,11 +141,11 @@ async function runSingleFileMode(
   }
 }
 
-function runDirectoryMode(
+async function runDirectoryMode(
   resolvedProjectDir: string,
   globalOpts: Record<string, unknown>,
   minSeverity: Severity,
-): void {
+): Promise<void> {
   const format = globalOpts.format as string | undefined;
   const verbose = globalOpts.verbose as boolean | undefined;
 
@@ -162,6 +163,10 @@ function runDirectoryMode(
   });
 
   const inventory = scan({ projectDir: resolvedProjectDir, excluder });
+
+  // Run history reconstruction (non-blocking — errors are swallowed internally)
+  const ccinspectConfigForHistory = loadConfig(resolvedProjectDir);
+  await runHistoryReconstruction(resolvedProjectDir, inventory, 'lint', ccinspectConfigForHistory.history);
 
   // Parse config files for resolver
   const layers: ParsedConfigLayers = {
