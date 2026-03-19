@@ -1,6 +1,6 @@
 {
   "name": "ccinspect",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Claude Code Configuration Inspector — analyze, lint, and resolve Claude Code configs",
   "type": "module",
   "bin": {
