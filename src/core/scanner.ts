@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, statSync, lstatSync, readlinkSync, readdirSync } from 'fs';
 import { join, relative, resolve, basename, dirname } from 'path';
 import fg from 'fast-glob';
 
@@ -82,6 +82,29 @@ function buildFileInfo(
       // Not in a git repo
     }
 
+    // Detect symlinks: check the file itself, then its parent directory.
+    // skills.sh symlinks the directory (.claude/skills/<name>/ → ...),
+    // so lstat on SKILL.md returns false — the parent dir is the symlink.
+    let isSymlink = false;
+    let symlinkTarget: string | undefined;
+    try {
+      const lstats = lstatSync(absolutePath);
+      if (lstats.isSymbolicLink()) {
+        isSymlink = true;
+        symlinkTarget = readlinkSync(absolutePath);
+      } else {
+        const parentDir = dirname(absolutePath);
+        const parentLstats = lstatSync(parentDir);
+        if (parentLstats.isSymbolicLink()) {
+          isSymlink = true;
+          const parentTarget = readlinkSync(parentDir);
+          symlinkTarget = join(parentTarget, basename(absolutePath));
+        }
+      }
+    } catch {
+      // lstat/readlink failed — leave as non-symlink
+    }
+
     return {
       path: absolutePath,
       relativePath: relative(projectRoot, absolutePath) || absolutePath,
@@ -92,6 +115,8 @@ function buildFileInfo(
       estimatedTokens: tokens,
       gitTracked: tracked,
       lastModified: stat.mtime,
+      isSymlink: isSymlink || undefined,
+      symlinkTarget,
     };
   } catch {
     return null;

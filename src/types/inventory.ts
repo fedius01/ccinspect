@@ -10,6 +10,8 @@ export interface FileInfo {
   estimatedTokens: number;
   gitTracked: boolean;
   lastModified: Date;
+  isSymlink?: boolean;           // true if the file/directory is a symlink
+  symlinkTarget?: string;        // raw readlink target (only set when isSymlink is true)
 }
 
 // Scanner only provides FileInfo metadata for rules.

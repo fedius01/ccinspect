@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { join } from 'path';
+import { mkdirSync, writeFileSync, symlinkSync, rmSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
+import { tmpdir } from 'os';
 import { scan } from '../../src/core/scanner.js';
 
 const FIXTURES = join(import.meta.dirname, '..', 'fixtures');
@@ -156,6 +159,62 @@ describe('Scanner', () => {
       const inventory = scan({ projectDir });
       expect(inventory.projectSettings).not.toBeNull();
       expect(inventory.projectSettings?.exists).toBe(true);
+    });
+  });
+
+  describe('symlinked skills', () => {
+    const tmpDir = join(tmpdir(), `cci-symlink-test-${process.pid}`);
+
+    beforeEach(() => {
+      // Create the real skill file outside .claude/skills/
+      mkdirSync(join(tmpDir, '.agents', 'skills', 'test-skill'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, '.agents', 'skills', 'test-skill', 'SKILL.md'),
+        [
+          '---',
+          'name: test-skill',
+          'description: A test skill installed via skills.sh',
+          '---',
+          '# Test Skill',
+          'This is a test.',
+        ].join('\n'),
+      );
+
+      // Symlink into .claude/skills/ (relative, matching skills.sh behavior)
+      mkdirSync(join(tmpDir, '.claude', 'skills'), { recursive: true });
+      symlinkSync(
+        join('..', '..', '.agents', 'skills', 'test-skill'),
+        join(tmpDir, '.claude', 'skills', 'test-skill'),
+      );
+
+      // git init so scanner can resolve git root
+      // eslint-disable-next-line sonarjs/no-os-command-from-path
+      execSync('git init', { cwd: tmpDir, stdio: 'ignore' });
+    });
+
+    afterEach(() => {
+      if (existsSync(tmpDir)) {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('discovers skills installed via symlink', () => {
+      const inventory = scan({ projectDir: tmpDir, skipGlobalDirs: true });
+
+      expect(inventory.projectSkills).toHaveLength(1);
+      expect(inventory.projectSkills[0].relativePath).toContain(join('test-skill', 'SKILL.md'));
+      expect(inventory.projectSkills[0].exists).toBe(true);
+      expect(inventory.projectSkills[0].lineCount).toBeGreaterThan(0);
+      expect(inventory.projectSkills[0].sizeBytes).toBeGreaterThan(0);
+    });
+
+    it('preserves symlink path in FileInfo (not resolved target)', () => {
+      const inventory = scan({ projectDir: tmpDir, skipGlobalDirs: true });
+      const skill = inventory.projectSkills[0];
+
+      // Path should go through .claude/skills/, not .agents/skills/
+      expect(skill.path).toContain(join('.claude', 'skills', 'test-skill'));
+      expect(skill.path).not.toContain('.agents');
     });
   });
 

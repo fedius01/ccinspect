@@ -1,5 +1,5 @@
-import { readFileSync, statSync } from 'fs';
-import { basename, dirname, resolve } from 'path';
+import { readFileSync, statSync, lstatSync, readlinkSync } from 'fs';
+import { basename, dirname, join, resolve } from 'path';
 import { relative } from 'path';
 
 import type {
@@ -40,6 +40,27 @@ function buildFileInfoForPath(
     // Not in a git repo
   }
 
+  // Detect symlinks: check the file itself, then its parent directory.
+  let isSymlink = false;
+  let symlinkTarget: string | undefined;
+  try {
+    const lstats = lstatSync(absolutePath);
+    if (lstats.isSymbolicLink()) {
+      isSymlink = true;
+      symlinkTarget = readlinkSync(absolutePath);
+    } else {
+      const parentDir = dirname(absolutePath);
+      const parentLstats = lstatSync(parentDir);
+      if (parentLstats.isSymbolicLink()) {
+        isSymlink = true;
+        const parentTarget = readlinkSync(parentDir);
+        symlinkTarget = join(parentTarget, basename(absolutePath));
+      }
+    }
+  } catch {
+    // lstat/readlink failed — leave as non-symlink
+  }
+
   return {
     path: absolutePath,
     relativePath: relative(projectRoot, absolutePath) || absolutePath,
@@ -50,6 +71,8 @@ function buildFileInfoForPath(
     estimatedTokens: tokens,
     gitTracked: tracked,
     lastModified: stat.mtime,
+    isSymlink: isSymlink || undefined,
+    symlinkTarget,
   };
 }
 
