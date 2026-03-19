@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "remote-api": {
+      "type": "sse",
+      "url": "https://api.example.com/mcp/sse"
+    },
+    "local-db": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"]
+    },
+    "another-remote": {
+      "type": "http",
+      "url": "https://api.example.com/mcp"
+    }
+  }
+}

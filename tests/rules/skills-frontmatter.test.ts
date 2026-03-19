@@ -249,7 +249,7 @@ describe('skills/frontmatter-valid rule', () => {
     expect(unknownIssues.some((i) => i.message.includes('"mode"'))).toBe(true);
   });
 
-  it('does not include user-invokable (with k) in allowlist', () => {
+  it('skips user-invokable (with k) — handled by dedicated typo rule', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'cci-skill-test-'));
     const skillDir = join(tmpDir, '.claude', 'skills', 'typo-skill');
     mkdirSync(skillDir, { recursive: true });
@@ -277,8 +277,8 @@ describe('skills/frontmatter-valid rule', () => {
     });
     const issues = skillFrontmatterValidRule.check(inventory, resolved);
     const unknownIssues = issues.filter((i) => i.message.includes('unknown'));
-    expect(unknownIssues).toHaveLength(1);
-    expect(unknownIssues[0].message).toContain('"user-invokable"');
+    // user-invokable is NOT flagged here — skills/user-invokable-typo handles it
+    expect(unknownIssues).toHaveLength(0);
   });
 
   it('emits info severity for unknown fields on symlinked (third-party) skills', () => {

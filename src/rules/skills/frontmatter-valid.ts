@@ -95,6 +95,8 @@ export const skillFrontmatterValidRule: LintRule = {
       // Warn on unknown fields
       const isThirdParty = skill.isSymlink === true;
       for (const key of Object.keys(parsed.frontmatter)) {
+        // Skip "user-invokable" — handled by skills/user-invokable-typo with a targeted error
+        if (key === 'user-invokable') continue;
         if (!KNOWN_FIELDS.has(key)) {
           if (isThirdParty) {
             const skillDir = extractSkillDirName(skill);

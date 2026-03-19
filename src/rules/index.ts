@@ -43,6 +43,13 @@ import { contradictionKeywordsRule } from './rules-dir/contradiction-keywords.js
 import { pluginReferenceValidRule } from './plugins/reference-valid.js';
 import { filenameCasingRule } from './naming/filename-casing.js';
 import { symlinkDetectedRule } from './skills/symlink-detected.js';
+import { userInvokableTypoRule } from './skills/user-invokable-typo.js';
+import { skillTooLargeRule } from './skills/too-large.js';
+import { skillNameMismatchRule } from './skills/name-mismatch.js';
+import { skillDescriptionVagueRule } from './skills/description-vague.js';
+import { migrateToSkillsRule } from './commands/migrate-to-skills.js';
+import { deprecatedSseTransportRule } from './mcp/deprecated-sse-transport.js';
+import { overlyBroadGlobRule } from './rules-dir/overly-broad-glob.js';
 
 export function getAllRules(): LintRule[] {
   return [
@@ -90,5 +97,12 @@ export function getAllRules(): LintRule[] {
     pluginReferenceValidRule,
     filenameCasingRule,
     symlinkDetectedRule,
+    userInvokableTypoRule,
+    skillTooLargeRule,
+    skillNameMismatchRule,
+    skillDescriptionVagueRule,
+    migrateToSkillsRule,
+    deprecatedSseTransportRule,
+    overlyBroadGlobRule,
   ];
 }
