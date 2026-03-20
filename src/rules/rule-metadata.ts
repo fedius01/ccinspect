@@ -1,6 +1,6 @@
 import type { FixCategory, FixComplexity } from '../types/lint.js';
 
-export interface RuleMetadata {
+interface RuleMetadata {
   fixCategory: FixCategory;
   fixComplexity: FixComplexity;
   ruleDescription: string;
