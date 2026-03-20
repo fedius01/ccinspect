@@ -50,6 +50,7 @@ import { skillDescriptionVagueRule } from './skills/description-vague.js';
 import { migrateToSkillsRule } from './commands/migrate-to-skills.js';
 import { deprecatedSseTransportRule } from './mcp/deprecated-sse-transport.js';
 import { overlyBroadGlobRule } from './rules-dir/overly-broad-glob.js';
+import { lowTranscriptRetentionRule } from './settings/low-transcript-retention.js';
 
 export function getAllRules(): LintRule[] {
   return [
@@ -104,5 +105,6 @@ export function getAllRules(): LintRule[] {
     migrateToSkillsRule,
     deprecatedSseTransportRule,
     overlyBroadGlobRule,
+    lowTranscriptRetentionRule,
   ];
 }

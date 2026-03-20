@@ -23,6 +23,9 @@ export interface LintEvidence {
   content: string;       // The matched text, value, or descriptive content
 }
 
+export type FixCategory = 'add' | 'remove' | 'edit' | 'rename' | 'restructure' | 'review';
+export type FixComplexity = 'trivial' | 'simple' | 'moderate' | 'complex';
+
 export interface LintIssue {
   ruleId: string;
   severity: Severity;
@@ -33,6 +36,13 @@ export interface LintIssue {
   suggestion: string;
   autoFixable: boolean;
   evidence?: LintEvidence[];
+  // LLM-friendly metadata (populated by JSON formatter from rule-metadata registry)
+  fixCategory?: FixCategory;
+  fixComplexity?: FixComplexity;
+  ruleDescription?: string;
+  docUrl?: string;
+  fileRelativePath?: string;
+  fileType?: string;
 }
 
 export interface LintRule {

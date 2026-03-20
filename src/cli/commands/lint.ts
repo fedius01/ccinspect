@@ -9,7 +9,7 @@ import { Linter } from '../../core/linter.js';
 import { getAllRules } from '../../rules/index.js';
 import { createExcluder } from '../../utils/excluder.js';
 import { printLintResult } from '../output/terminal.js';
-import { printLintResultJson } from '../output/json.js';
+import { printLintResultJson, enrichLintIssues } from '../output/json.js';
 import { printLintResultMarkdown } from '../output/markdown.js';
 import { parseSettingsJson } from '../../parsers/settings-json.js';
 import { parseMcpJson } from '../../parsers/mcp-json.js';
@@ -117,6 +117,7 @@ async function runSingleFileMode(
   const filteredResult = filterResult(result, minSeverity);
 
   if (format === 'json') {
+    enrichLintIssues(filteredResult.issues, ctx.inventory.projectRoot);
     const output: Record<string, unknown> = {
       singleFileMode: {
         file: displayName,
@@ -205,7 +206,7 @@ async function runDirectoryMode(
   const filteredResult = filterResult(result, minSeverity);
 
   if (format === 'json') {
-    printLintResultJson(filteredResult);
+    printLintResultJson(filteredResult, resolvedProjectDir);
   } else if (format === 'md') {
     console.log(printLintResultMarkdown(filteredResult));
   } else {
