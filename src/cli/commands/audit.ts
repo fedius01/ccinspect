@@ -15,6 +15,13 @@ import { getAllRules } from '../../rules/index.js';
 import { loadConfig } from '../../utils/config.js';
 import { runHistoryReconstruction } from '../../core/history-integration.js';
 import { analyzeFileHeatmap } from '../../core/transcript-file-heatmap.js';
+import { getHistory, computeLineage } from '../../core/history-reconstructor.js';
+import {
+  attributeSessions,
+  buildVersionBreakdown,
+  countSupersededSessions,
+  detectRetentionGap,
+} from '../../core/version-attributor.js';
 import { shortenPath } from '../output/terminal.js';
 import type {
   ConfigUtilization,
@@ -23,6 +30,19 @@ import type {
   RuleUtilization,
   UtilizationReport,
 } from '../../types/transcript.js';
+import type { HistoryEntry, VersionAttribution, VersionUtilizationEntry } from '../../types/history.js';
+
+/** Version context for audit output (null when no history available). */
+interface AuditVersionContext {
+  history: HistoryEntry[];
+  attributions: VersionAttribution[];
+  breakdown: VersionUtilizationEntry[];
+  activeLineage: number[];
+  latestVersion: number;
+  latestVersionDate: string;
+  superseded: { count: number; versions: Set<number> };
+  retentionWarning: string | null;
+}
 
 export function registerAuditCommand(program: Command): void {
   program
@@ -33,11 +53,15 @@ export function registerAuditCommand(program: Command): void {
     .option('--days <n>', 'Analyze sessions from last N days', '30')
     .option('--since <date>', 'Analyze sessions after this date (ISO format)')
     .option('--session <uuid>', 'Analyze a specific session only')
+    .option('--all-versions', 'Include sessions during superseded config versions')
+    .option('--version <n>', 'Filter to a specific config version only')
     .action(async (_options, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       const projectDir = globalOpts.projectDir as string | undefined;
       const format = globalOpts.format as string | undefined;
       const sessionId = _options.session as string | undefined;
+      const allVersions = _options.allVersions as boolean | undefined;
+      const versionFilter = _options.version ? parseInt(_options.version as string, 10) : undefined;
 
       const resolvedProjectDir = resolvePath(projectDir || process.cwd());
 
@@ -65,6 +89,36 @@ export function registerAuditCommand(program: Command): void {
         days,
         sessionId,
       });
+
+      // 2b. Version attribution
+      let versionCtx: AuditVersionContext | null = null;
+      const history = getHistory(resolvedProjectDir);
+      if (history.length > 0 && stats.sessionsAnalyzed > 0) {
+        // Build session start date map from parse results
+        const sessionStartDates = new Map<string, Date>();
+        for (const pr of parseResults) {
+          sessionStartDates.set(pr.session.sessionId, pr.session.startedAt);
+        }
+
+        const attributions = attributeSessions(sessionStartDates, history);
+        const breakdown = buildVersionBreakdown(attributions, history, stats);
+        const lineage = computeLineage(history);
+        const activeLineage = [...lineage].sort((a, b) => b - a);
+        const latest = history[history.length - 1];
+        const superseded = countSupersededSessions(attributions);
+        const retentionWarning = detectRetentionGap(history, stats);
+
+        versionCtx = {
+          history,
+          attributions,
+          breakdown,
+          activeLineage,
+          latestVersion: latest.version,
+          latestVersionDate: latest.timestamp,
+          superseded,
+          retentionWarning,
+        };
+      }
 
       // 3. Produce utilization report
       const utilizationOpts: UtilizationOptions = { days };
@@ -97,9 +151,12 @@ export function registerAuditCommand(program: Command): void {
 
       // 6. Format output
       if (format === 'json') {
-        printAuditJson(report, discrepancyReport, fileHeatmap);
+        printAuditJson(report, discrepancyReport, fileHeatmap, versionCtx);
       } else {
-        printAuditTerminal(report, discrepancyReport, fileHeatmap, resolvedProjectDir);
+        printAuditTerminal(
+          report, discrepancyReport, fileHeatmap, resolvedProjectDir,
+          versionCtx, allVersions ?? false, versionFilter,
+        );
       }
     });
 }
@@ -111,6 +168,9 @@ function printAuditTerminal(
   discrepancyReport: DiscrepancyReport,
   fileHeatmap: FileHeatmapReport,
   projectRoot: string,
+  versionCtx: AuditVersionContext | null,
+  allVersions: boolean,
+  versionFilter?: number,
 ): void {
   console.log();
   console.log(chalk.bold('ccinspect audit'));
@@ -145,10 +205,38 @@ function printAuditTerminal(
   if (completeParts.length > 0) qualityParts.push(completeParts.join(', '));
   qualityParts.push(`last ${report.days} days`);
 
-  console.log(
-    chalk.cyan('Config Utilization') +
-      `  (${qualityParts.join(' · ')})`,
-  );
+  // Version context header
+  if (versionCtx) {
+    const vDate = new Date(versionCtx.latestVersionDate).toISOString().slice(0, 10);
+    console.log(
+      chalk.cyan('Config Utilization') +
+        `  ·  v${versionCtx.latestVersion} (active since ${vDate})`,
+    );
+    const lineageStr = versionCtx.activeLineage.map(v => 'v' + v).join(' \u2190 ');
+    console.log(chalk.dim('  Active lineage: ' + lineageStr));
+    console.log(`  ${qualityParts.join(' · ')}`);
+
+    // Superseded session warning
+    if (versionCtx.superseded.count > 0 && !allVersions) {
+      const versionList = [...versionCtx.superseded.versions].sort((a, b) => a - b).map(v => `v${v}`).join(', ');
+      console.log();
+      console.log(
+        chalk.yellow(`  ⚠ ${versionCtx.superseded.count} session${s(versionCtx.superseded.count)} during superseded versions (${versionList}) not shown`),
+      );
+      console.log(chalk.dim('    Use --all-versions to include'));
+    }
+
+    // Retention warning
+    if (versionCtx.retentionWarning) {
+      console.log();
+      console.log(chalk.yellow(`  ⚠ ${versionCtx.retentionWarning}`));
+    }
+  } else {
+    console.log(
+      chalk.cyan('Config Utilization') +
+        `  (${qualityParts.join(' · ')})`,
+    );
+  }
   console.log();
 
   // Count warnings/infos for the summary footer
@@ -204,6 +292,9 @@ function printAuditTerminal(
   );
   printFileHeatmapSection(fileHeatmap, report.sessionsAnalyzed, projectRoot);
   printDiscrepancySection(discrepancyReport);
+  if (versionCtx && versionCtx.breakdown.length > 0) {
+    printVersionBreakdownSection(versionCtx, allVersions, versionFilter);
+  }
 
   // Summary footer
   console.log(chalk.dim('  ──────────────────────────────────────────────────────────'));
@@ -510,6 +601,79 @@ function printFileHeatmapSection(
   }
 }
 
+function printVersionBreakdownSection(
+  ctx: AuditVersionContext,
+  allVersions: boolean,
+  versionFilter?: number,
+): void {
+  let entries = ctx.breakdown;
+
+  // Apply filters
+  if (versionFilter !== undefined) {
+    entries = entries.filter((e) => e.version === versionFilter);
+    if (entries.length === 0) {
+      console.log(chalk.yellow(`  No data for version ${versionFilter}`));
+      console.log();
+      return;
+    }
+  }
+
+  const label = allVersions ? 'all versions' : 'active lineage';
+  console.log(`  ${chalk.bold('Config Version Utilization')}  (${label})`);
+  console.log();
+
+  // Group: show recent versions in detail, collapse old ones
+  const MAX_DETAIL = 5;
+  const detailEntries = entries.slice(0, MAX_DETAIL);
+  const collapsedEntries = entries.slice(MAX_DETAIL);
+
+  for (const entry of detailEntries) {
+    // Skip superseded if not --all-versions (unless filtered to specific version)
+    if (!entry.inActiveLineage && !allVersions && versionFilter === undefined) continue;
+
+    const isActive = entry.version === ctx.latestVersion;
+    const isSuperSeded = !entry.inActiveLineage;
+    const connector = isSuperSeded ? chalk.dim('┊') : '│';
+    let dot = '●';
+    if (isSuperSeded) dot = chalk.dim('┊');
+    else if (isActive) dot = chalk.green('●');
+
+    const versionLabel = `v${entry.version}`;
+    const activeLabel = isActive ? chalk.green(' (active)') : '';
+    const restoreLabel = entry.restoredFrom !== undefined
+      ? chalk.cyan(`  RESTORED from v${entry.restoredFrom}`)
+      : '';
+
+    const dateFrom = new Date(entry.activeFrom).toISOString().slice(0, 10);
+    const dateTo = entry.activeTo
+      ? new Date(entry.activeTo).toISOString().slice(0, 10)
+      : 'now';
+    const dateRange = `${dateFrom} → ${dateTo}`;
+
+    const sessionLabel = `${entry.sessionCount} session${s(entry.sessionCount)}`;
+    const dayLabel = `${entry.activeDays} day${s(entry.activeDays)}`;
+
+    console.log(`  ${dot} ${chalk.bold(versionLabel)}${activeLabel}  ${dateRange}${' '.repeat(4)}${sessionLabel} · ${dayLabel}${restoreLabel}`);
+
+    if (entry.topDelegations.length > 0) {
+      const delParts = entry.topDelegations.map((d) => `${d.agent}: ${d.count}`);
+      console.log(`  ${connector}  ${delParts.join('  ·  ')}`);
+    }
+
+    console.log(`  ${connector}`);
+  }
+
+  // Collapsed older entries
+  if (collapsedEntries.length > 0) {
+    const totalSessions = collapsedEntries.reduce((sum, e) => sum + e.sessionCount, 0);
+    console.log(
+      `  ○ earlier${' '.repeat(9)}${totalSessions} session${s(totalSessions)} across ${collapsedEntries.length} version${s(collapsedEntries.length)}`,
+    );
+  }
+
+  console.log();
+}
+
 function printDiscrepancySection(report: DiscrepancyReport): void {
   if (report.discrepancies.length === 0) return;
 
@@ -557,8 +721,9 @@ function printAuditJson(
   report: UtilizationReport,
   discrepancyReport: DiscrepancyReport,
   fileHeatmap: FileHeatmapReport,
+  versionCtx: AuditVersionContext | null,
 ): void {
-  const output = {
+  const output: Record<string, unknown> = {
     dataQuality: {
       sessionsAnalyzed: report.sessionsAnalyzed,
       sessionsExact: report.sessionsExact,
@@ -599,6 +764,30 @@ function printAuditJson(
       coEditClusters: fileHeatmap.coEditClusters,
     },
   };
+
+  // Add version context when history is available
+  if (versionCtx) {
+    output.versionContext = {
+      activeVersion: versionCtx.latestVersion,
+      activeVersionDate: versionCtx.latestVersionDate,
+      activeLineage: versionCtx.activeLineage,
+      supersededSessionCount: versionCtx.superseded.count,
+      supersededVersions: [...versionCtx.superseded.versions].sort((a, b) => a - b),
+      retentionWarning: versionCtx.retentionWarning,
+    };
+    output.versionBreakdown = versionCtx.breakdown.map((e) => ({
+      version: e.version,
+      inActiveLineage: e.inActiveLineage,
+      source: e.source,
+      timestamp: e.timestamp,
+      ...(e.restoredFrom !== undefined ? { restoredFrom: e.restoredFrom } : {}),
+      activeFrom: e.activeFrom,
+      activeTo: e.activeTo,
+      sessionCount: e.sessionCount,
+      activeDays: e.activeDays,
+      topDelegations: e.topDelegations,
+    }));
+  }
 
   console.log(JSON.stringify(output, null, 2));
 }

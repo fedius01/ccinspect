@@ -104,6 +104,39 @@ export interface TranscriptConfigChange {
   confidence: 'high' | 'low';
 }
 
+/** Maps a transcript session to the config version that was active at session start. */
+export interface VersionAttribution {
+  sessionId: string;
+  /** Version number (0 if no history available). */
+  configVersion: number;
+  /** Whether this version is in the active ancestry chain. */
+  inActiveLineage: boolean;
+  /**
+   * - 'exact' — version timestamp clearly before session start
+   * - 'estimated' — session predates all versions, attributed to v1
+   * - 'unattributed' — no history available
+   */
+  confidence: 'exact' | 'estimated' | 'unattributed';
+}
+
+/** Per-version session breakdown for audit output. */
+export interface VersionUtilizationEntry {
+  version: number;
+  inActiveLineage: boolean;
+  source: 'git' | 'transcript' | 'disk' | 'restore';
+  timestamp: string;
+  restoredFrom?: number;
+  /** Date range this version was active (until next version's timestamp). */
+  activeFrom: string;
+  activeTo: string | null; // null = still active
+  /** Sessions attributed to this version. */
+  sessionCount: number;
+  /** Duration in days this version was active. */
+  activeDays: number;
+  /** Top agent delegations during this version. */
+  topDelegations: Array<{ agent: string; count: number }>;
+}
+
 /** Configuration for history feature in .ccinspect.json */
 export interface HistoryConfig {
   enabled?: boolean;

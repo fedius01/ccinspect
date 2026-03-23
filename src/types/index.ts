@@ -83,6 +83,8 @@ export type {
   DiffHunk,
   FileDiff,
   DiffResult,
+  VersionAttribution,
+  VersionUtilizationEntry,
 } from './history.js';
 
 import type { FileScope, ConfigInventory as CI } from './inventory.js';

@@ -48,12 +48,14 @@
     "access": "public"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
     "picomatch": "^4.0.0",
-    "tiktoken": "^1.0.21"
+    "tiktoken": "^1.0.21",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",

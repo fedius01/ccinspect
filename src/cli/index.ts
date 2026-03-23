@@ -16,6 +16,8 @@ import { registerSessionRecoverCommand } from './commands/session-recover.js';
 import { registerHistoryCommand } from './commands/history.js';
 import { registerDiffCommand } from './commands/diff.js';
 import { registerRestoreCommand } from './commands/restore.js';
+import { registerMcpCommand } from './commands/mcp.js';
+import { registerSetupCommand } from './commands/setup.js';
 
 declare const PKG_VERSION: string | undefined;
 
@@ -52,6 +54,8 @@ registerSessionRecoverCommand(program);
 registerHistoryCommand(program);
 registerDiffCommand(program);
 registerRestoreCommand(program);
+registerMcpCommand(program);
+registerSetupCommand(program);
 
 // Deprecated alias: resolve → blame
 program
