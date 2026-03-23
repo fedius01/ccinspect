@@ -31,7 +31,7 @@ import {
   detectRetentionGap,
 } from '../core/version-attributor.js';
 import { hashFiles } from '../utils/content-hash.js';
-import type { ConfigVersion, HistoryEntry } from '../types/history.js';
+import type { ConfigVersion } from '../types/history.js';
 import type { ConfigInventory, LintIssue } from '../types/index.js';
 
 /**

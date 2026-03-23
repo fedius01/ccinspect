@@ -85,6 +85,7 @@ export type {
   DiffResult,
   VersionAttribution,
   VersionUtilizationEntry,
+  VersionSource,
 } from './history.js';
 
 import type { FileScope, ConfigInventory as CI } from './inventory.js';

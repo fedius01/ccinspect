@@ -13,6 +13,9 @@ export interface ConfigFileSnapshot {
   lastModified: string; // ISO 8601
 }
 
+/** The origin of a config version */
+export type VersionSource = 'git' | 'transcript' | 'disk' | 'restore';
+
 /** Git commit metadata attached to git-sourced versions */
 export interface GitCommitInfo {
   hash: string;
@@ -26,7 +29,7 @@ export interface ConfigVersion {
   parentVersion: number; // 0 = sentinel for v1
   restoredFrom?: number; // only on restore versions
   timestamp: string; // ISO 8601
-  source: 'git' | 'transcript' | 'disk' | 'restore';
+  source: VersionSource;
   gitCommit?: GitCommitInfo;
   transcriptSession?: { sessionId: string };
   trigger?: string; // for disk/restore: which cci command
@@ -41,7 +44,7 @@ export interface HistoryEntry {
   parentVersion: number;
   restoredFrom?: number;
   timestamp: string;
-  source: 'git' | 'transcript' | 'disk' | 'restore';
+  source: VersionSource;
   gitCommit?: GitCommitInfo;
   transcriptSession?: { sessionId: string };
   trigger?: string;
@@ -123,7 +126,7 @@ export interface VersionAttribution {
 export interface VersionUtilizationEntry {
   version: number;
   inActiveLineage: boolean;
-  source: 'git' | 'transcript' | 'disk' | 'restore';
+  source: VersionSource;
   timestamp: string;
   restoredFrom?: number;
   /** Date range this version was active (until next version's timestamp). */
