@@ -1,5 +1,6 @@
 {
   "project": ["src/**/*.ts"],
+  "ignoreBinaries": ["claude"],
   "ignore": [
     "src/types/**",
     "src/parsers/**",

@@ -147,19 +147,19 @@ describe('setup command — global mode (claude CLI)', () => {
 
     // Simulate the global install flow
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(true);
 
     const isGloballyRegistered = (() => {
       try {
-        const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+        const output = mockedExecSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
         return (output as string).includes('ccinspect');
       } catch { return false; }
     })();
     expect(isGloballyRegistered).toBe(false);
 
-    execSync('claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve', { stdio: 'pipe' });
+    mockedExecSync('claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve', { stdio: 'pipe' });
 
     expect(mockedExecSync).toHaveBeenCalledWith(
       'claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve',
@@ -173,7 +173,7 @@ describe('setup command — global mode (claude CLI)', () => {
     });
 
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(false);
   });
@@ -184,11 +184,11 @@ describe('setup command — global mode (claude CLI)', () => {
       .mockReturnValueOnce(Buffer.from('ccinspect\ngithub')); // claude mcp list (registered)
 
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(true);
 
-    const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+    const output = mockedExecSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
     const isGloballyRegistered = (output as string).includes('ccinspect');
     expect(isGloballyRegistered).toBe(true);
 
@@ -218,11 +218,11 @@ describe('setup command — uninstall from both scopes', () => {
 
     // Global removal
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(true);
 
-    execSync('claude mcp remove ccinspect', { stdio: 'pipe' });
+    mockedExecSync('claude mcp remove ccinspect', { stdio: 'pipe' });
 
     // Project removal
     const existing = readMcp() as Record<string, Record<string, unknown>>;
@@ -257,11 +257,11 @@ describe('setup command — status checks both scopes', () => {
       .mockReturnValueOnce(Buffer.from('ccinspect\ngithub')); // claude mcp list
 
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(true);
 
-    const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+    const output = mockedExecSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
     const isGloballyRegistered = (output as string).includes('ccinspect');
     expect(isGloballyRegistered).toBe(true);
   });
@@ -280,7 +280,7 @@ describe('setup command — status checks both scopes', () => {
 
     expect(existsSync(getMcpPath())).toBe(false);
     const claudeAvailable = (() => {
-      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+      try { mockedExecSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
     })();
     expect(claudeAvailable).toBe(false);
   });
