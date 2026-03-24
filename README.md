@@ -36,7 +36,7 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 **ccinspect** fixes that with next capabilities:
 
 🔍 **Discover** — finds every config file across all scopes and shows sizes, tokens, git status
-🧹 **Lint** — runs 51 rules catching security gaps, dead references, conflicts, and bloat
+🧹 **Lint** — runs 52 rules catching security gaps, dead references, conflicts, and bloat
 📋 **Evidence** — see exactly which lines triggered each detection
 🔗 **Blame** — shows the effective config after all layers merge, with origin tracking and precedence badges
 ⚖️ **Compare** — diffs configurations across projects side-by-side
@@ -53,17 +53,38 @@ Claude Code uses **30+ config files** across **7+ locations** — and when they 
 ## Quick start
 
 ```bash
-# Run without installing
-npx ccinspect scan
-npx ccinspect lint
-
-# Or install globally
 npm install -g ccinspect
-cci scan
-cci lint
 ```
 
+Restart Claude Code. That's it — ccinspect auto-registers as an MCP server.
+
+Ask Claude Code naturally:
+- "Check my config for issues"
+- "Which agents are actually being used?"
+- "Run a full health check"
+
+> **Manual registration:** `cci setup` or `claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve`
+
+> **Without installing:** `npx ccinspect scan` / `npx ccinspect lint`
+
 > **Tip:** `cci` and `ccinspect` are interchangeable — use whichever you prefer.
+
+## MCP integration
+
+ccinspect exposes 8 tools via MCP (Model Context Protocol) so Claude Code can call them directly:
+
+| Tool | What it does |
+|------|-------------|
+| `health_check` | All-in-one: lint + scan + audit + history in a single call |
+| `lint` | Run 52 rules against your config |
+| `scan` | Discover all config files |
+| `audit` | Config utilization from session transcripts |
+| `history` | Config version timeline |
+| `diff` | Compare two config versions |
+| `restore` | Roll back to a previous version |
+| `blame` | Show effective merged config with origins |
+
+The `health_check` tool groups findings per config file and surfaces co-occurrence patterns — ideal for Claude Code to diagnose and fix issues in one pass.
 
 ## What it catches
 
@@ -144,7 +165,7 @@ cci restore v3 CLAUDE.md
 
 **`cci scan`** — *"What do I have?"* — Discovers every config file across all scopes, shows sizes, token counts, and git status. Flags when a user-level file is shadowed by a project-level equivalent. Doesn't look inside files — just the inventory.
 
-**`cci lint`** — *"What's wrong?"* — Runs 51 rules checking for dead globs, contradictions, dangerous permissions, oversized files, stale imports, and more. The quality gate.
+**`cci lint`** — *"What's wrong?"* — Runs 52 rules checking for dead globs, contradictions, dangerous permissions, oversized files, stale imports, and more. The quality gate.
 
 **`cci blame`** — *"What's actually in effect?"* — After all layers merge, shows which permissions apply, which env vars win, which MCP servers are active — and which file is responsible. The answer to "I set X but it's not working."
 
@@ -171,7 +192,7 @@ cci restore v3 CLAUDE.md
 | Command | Description |
 |---------|-------------|
 | `cci scan` | Discover and inventory all config files with sizes, token counts, and git status. Use `--all` to include config locations that don't exist yet |
-| `cci lint [target]` | Run 51 rules — pass a directory or a single config file |
+| `cci lint [target]` | Run 52 rules — pass a directory or a single config file |
 | `cci blame` | Show effective config after all layers merge, with origin tracking |
 | `cci blame settings` | Show raw settings key-value pairs with source badges |
 | `cci compare <dir1> <dir2>` | Compare configurations across projects side-by-side |
@@ -184,6 +205,8 @@ cci restore v3 CLAUDE.md
 | `cci diff <v1> <v2> [path]` | Compare two config versions with colored unified diff |
 | `cci restore <version> [path]` | Roll back config to a previous version with safety snapshot |
 | `cci session-recover` | Generate a recovery prompt from the last interrupted session |
+| `cci mcp serve` | Start MCP server for Claude Code integration (stdio transport) |
+| `cci setup` | Register MCP server globally — `--project` for .mcp.json, `--status` to check |
 
 > **Scan output:** When a user-global agent, skill, or command is shadowed by a project-level equivalent of the same name, `cci scan` dims the entry and marks it `(inactive)` — so you can see why a global config isn't taking effect.
 
