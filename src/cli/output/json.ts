@@ -2,7 +2,7 @@ import { relative } from 'path';
 import type { ConfigInventory, LintIssue, LintResult } from '../../types/index.js';
 import type { RuntimeInfo } from '../../types/runtime.js';
 import { getRuleMetadata } from '../../rules/rule-metadata.js';
-import { classifyConfigFile } from '../../utils/file-classifier.js';
+import { classifyConfigFile, inferScope } from '../../utils/file-classifier.js';
 
 export function printInventoryJson(inventory: ConfigInventory): void {
   console.log(JSON.stringify(inventory, null, 2));
@@ -38,6 +38,7 @@ function enrichIssue(issue: LintIssue, projectRoot: string): LintIssue {
     const fileType = classifyConfigFile(issue.file);
     if (fileType) {
       issue.fileType = fileType;
+      issue.scope = inferScope(issue.file, fileType);
     }
   }
 

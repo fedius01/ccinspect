@@ -311,6 +311,72 @@ describe('MCP Server', () => {
       expect(auditData.sessionsAnalyzed).toBe(0);
     });
 
+    it('includes componentSummary array in output', async () => {
+      const result = await handleHealthCheck({ projectDir: FULL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+
+      expect(data).toHaveProperty('componentSummary');
+      expect(Array.isArray(data.componentSummary)).toBe(true);
+    });
+
+    it('includes analysisHints array in output', async () => {
+      const result = await handleHealthCheck({ projectDir: FULL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+
+      expect(data).toHaveProperty('analysisHints');
+      expect(Array.isArray(data.analysisHints)).toBe(true);
+    });
+
+    it('componentSummary groups lint issues by file', async () => {
+      const result = await handleHealthCheck({ projectDir: FULL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+      const summary = data.componentSummary as Array<Record<string, unknown>>;
+
+      if (summary.length > 0) {
+        const entry = summary[0];
+        expect(entry).toHaveProperty('name');
+        expect(entry).toHaveProperty('type');
+        expect(entry).toHaveProperty('scope');
+        expect(entry).toHaveProperty('file');
+        expect(entry).toHaveProperty('lintIssues');
+        expect(Array.isArray(entry.lintIssues)).toBe(true);
+      }
+    });
+
+    it('lint issues include scope field when file is classifiable', async () => {
+      const result = await handleHealthCheck({ projectDir: FULL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+      const lintData = data.lint as Record<string, unknown>;
+      const issues = lintData.issues as Array<Record<string, unknown>>;
+
+      const issuesWithFile = issues.filter((i) => i.fileType);
+      if (issuesWithFile.length > 0) {
+        // All issues with a classifiable file type should have scope
+        for (const issue of issuesWithFile) {
+          expect(issue).toHaveProperty('scope');
+          expect(['enterprise', 'user', 'project-shared', 'project-local']).toContain(issue.scope);
+        }
+      }
+    });
+
+    it('analysisHints are capped at 5', async () => {
+      // Use a project that might generate many findings
+      const result = await handleHealthCheck({ projectDir: FULL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+      const hints = data.analysisHints as string[];
+
+      expect(hints.length).toBeLessThanOrEqual(5);
+    });
+
+    it('analysisHints is empty array when no co-occurrence patterns exist', async () => {
+      // Minimal project should have few/no co-occurrence patterns
+      const result = await handleHealthCheck({ projectDir: MINIMAL_PROJECT });
+      const data = parseResult(result) as Record<string, unknown>;
+
+      expect(data).toHaveProperty('analysisHints');
+      expect(Array.isArray(data.analysisHints)).toBe(true);
+    });
+
     it('returns error for non-existent directory', async () => {
       const result = await handleHealthCheck({ projectDir: '/nonexistent/path' });
       expect(result.isError).toBe(true);

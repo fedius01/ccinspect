@@ -21,6 +21,7 @@
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "prepublishOnly": "npm run build && npm run test",
     "check-package": "npm pack --dry-run",
+    "postinstall": "claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve 2>/dev/null && echo '\\n  ✓ ccinspect MCP server registered. Restart Claude Code to connect.\\n' || true",
     "smells": "eslint src/ tests/ && knip",
     "eval:contradiction": "npx tsx tests/corpus/contradiction-keywords/eval.ts"
   },

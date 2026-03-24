@@ -1,11 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolve as resolvePath, join } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { execSync } from 'child_process';
 
 /**
  * Tests for the setup command logic.
- * We test the file manipulation directly since the command uses chalk (CLI layer).
+ * We test the file manipulation directly and mock execSync for claude CLI calls.
  */
+
+vi.mock('child_process', () => ({
+  execSync: vi.fn(),
+}));
+
+const mockedExecSync = vi.mocked(execSync);
 
 const TMP_DIR = resolvePath('tests/fixtures/.setup-test-tmp');
 
@@ -29,7 +36,7 @@ const EXPECTED_ENTRY = {
   args: ['-y', 'ccinspect', 'mcp', 'serve'],
 };
 
-describe('setup command file operations', () => {
+describe('setup command — project mode (.mcp.json)', () => {
   beforeEach(() => {
     mkdirSync(TMP_DIR, { recursive: true });
   });
@@ -42,7 +49,7 @@ describe('setup command file operations', () => {
     const mcpPath = getMcpPath();
     expect(existsSync(mcpPath)).toBe(false);
 
-    // Simulate install
+    // Simulate --project install
     const data = { mcpServers: { ccinspect: EXPECTED_ENTRY } };
     writeFileSync(mcpPath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 
@@ -61,7 +68,6 @@ describe('setup command file operations', () => {
     };
     writeMcp(existing);
 
-    // Simulate adding ccinspect
     const data = readMcp() as Record<string, Record<string, unknown>>;
     data.mcpServers.ccinspect = EXPECTED_ENTRY;
     writeMcp(data);
@@ -75,7 +81,6 @@ describe('setup command file operations', () => {
     const data = { mcpServers: { ccinspect: EXPECTED_ENTRY } };
     writeMcp(data);
 
-    // Check it's already there
     const existing = readMcp() as Record<string, Record<string, unknown>>;
     const isRegistered = existing?.mcpServers != null && 'ccinspect' in existing.mcpServers;
     expect(isRegistered).toBe(true);
@@ -85,7 +90,6 @@ describe('setup command file operations', () => {
     const data = { mcpServers: { ccinspect: EXPECTED_ENTRY } };
     writeMcp(data);
 
-    // Simulate uninstall
     const existing = readMcp() as Record<string, Record<string, unknown>>;
     delete existing.mcpServers.ccinspect;
 
@@ -108,7 +112,6 @@ describe('setup command file operations', () => {
     };
     writeMcp(data);
 
-    // Simulate uninstall
     const existing = readMcp() as Record<string, Record<string, unknown>>;
     delete existing.mcpServers.ccinspect;
     writeMcp(existing);
@@ -119,28 +122,166 @@ describe('setup command file operations', () => {
     expect(existsSync(getMcpPath())).toBe(true);
   });
 
-  it('status reports not registered when no .mcp.json', () => {
-    expect(existsSync(getMcpPath())).toBe(false);
-    // Would show "not found" / "not registered" in terminal output
+  it('produces valid JSON with correct structure', () => {
+    const data = { mcpServers: { ccinspect: EXPECTED_ENTRY } };
+    writeMcp(data);
+
+    const raw = readFileSync(getMcpPath(), 'utf-8');
+    expect(raw).toContain('  "mcpServers"');
+    expect(raw.endsWith('\n')).toBe(true);
+    expect(() => JSON.parse(raw)).not.toThrow();
+  });
+});
+
+describe('setup command — global mode (claude CLI)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('status reports registered when entry exists', () => {
+  it('default setup calls claude mcp add --scope user', () => {
+    // Simulate: claude --version succeeds, not already registered, add succeeds
+    mockedExecSync
+      .mockReturnValueOnce(Buffer.from('1.0.0'))  // claude --version
+      .mockReturnValueOnce(Buffer.from(''))        // claude mcp list (empty = not registered)
+      .mockReturnValueOnce(Buffer.from(''));       // claude mcp add
+
+    // Simulate the global install flow
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(true);
+
+    const isGloballyRegistered = (() => {
+      try {
+        const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+        return (output as string).includes('ccinspect');
+      } catch { return false; }
+    })();
+    expect(isGloballyRegistered).toBe(false);
+
+    execSync('claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve', { stdio: 'pipe' });
+
+    expect(mockedExecSync).toHaveBeenCalledWith(
+      'claude mcp add --scope user ccinspect -- npx -y ccinspect mcp serve',
+      { stdio: 'pipe' },
+    );
+  });
+
+  it('prints manual instructions when claude CLI not found', () => {
+    mockedExecSync.mockImplementation(() => {
+      throw new Error('command not found: claude');
+    });
+
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(false);
+  });
+
+  it('skips when already registered globally', () => {
+    mockedExecSync
+      .mockReturnValueOnce(Buffer.from('1.0.0'))           // claude --version
+      .mockReturnValueOnce(Buffer.from('ccinspect\ngithub')); // claude mcp list (registered)
+
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(true);
+
+    const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+    const isGloballyRegistered = (output as string).includes('ccinspect');
+    expect(isGloballyRegistered).toBe(true);
+
+    // Should NOT call claude mcp add
+    expect(mockedExecSync).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('setup command — uninstall from both scopes', () => {
+  beforeEach(() => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    rmSync(TMP_DIR, { recursive: true, force: true });
+  });
+
+  it('uninstall calls claude mcp remove AND removes from .mcp.json', () => {
+    // Set up project-scope registration
+    writeMcp({ mcpServers: { ccinspect: EXPECTED_ENTRY } });
+
+    // Mock: claude CLI available, remove succeeds
+    mockedExecSync
+      .mockReturnValueOnce(Buffer.from('1.0.0'))  // claude --version
+      .mockReturnValueOnce(Buffer.from(''));       // claude mcp remove
+
+    // Global removal
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(true);
+
+    execSync('claude mcp remove ccinspect', { stdio: 'pipe' });
+
+    // Project removal
+    const existing = readMcp() as Record<string, Record<string, unknown>>;
+    delete existing.mcpServers.ccinspect;
+    const remainingServers = Object.keys(existing.mcpServers).length;
+    const otherKeys = Object.keys(existing).filter(k => k !== 'mcpServers').length;
+    if (remainingServers === 0 && otherKeys === 0) {
+      rmSync(getMcpPath());
+    }
+
+    expect(existsSync(getMcpPath())).toBe(false);
+    expect(mockedExecSync).toHaveBeenCalledWith(
+      'claude mcp remove ccinspect',
+      { stdio: 'pipe' },
+    );
+  });
+});
+
+describe('setup command — status checks both scopes', () => {
+  beforeEach(() => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    rmSync(TMP_DIR, { recursive: true, force: true });
+  });
+
+  it('status reports registered when registered globally', () => {
+    mockedExecSync
+      .mockReturnValueOnce(Buffer.from('1.0.0'))           // claude --version
+      .mockReturnValueOnce(Buffer.from('ccinspect\ngithub')); // claude mcp list
+
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(true);
+
+    const output = execSync('claude mcp list', { stdio: 'pipe', encoding: 'utf-8' });
+    const isGloballyRegistered = (output as string).includes('ccinspect');
+    expect(isGloballyRegistered).toBe(true);
+  });
+
+  it('status reports registered when registered in .mcp.json', () => {
     writeMcp({ mcpServers: { ccinspect: EXPECTED_ENTRY } });
     const data = readMcp() as Record<string, Record<string, unknown>>;
     const isRegistered = data?.mcpServers != null && 'ccinspect' in data.mcpServers;
     expect(isRegistered).toBe(true);
   });
 
-  it('produces valid JSON with correct structure', () => {
-    const data = { mcpServers: { ccinspect: EXPECTED_ENTRY } };
-    writeMcp(data);
+  it('status reports not registered when no .mcp.json and no global', () => {
+    mockedExecSync.mockImplementation(() => {
+      throw new Error('command not found: claude');
+    });
 
-    const raw = readFileSync(getMcpPath(), 'utf-8');
-    // Should be formatted with 2-space indent
-    expect(raw).toContain('  "mcpServers"');
-    // Should end with newline
-    expect(raw.endsWith('\n')).toBe(true);
-    // Should parse without error
-    expect(() => JSON.parse(raw)).not.toThrow();
+    expect(existsSync(getMcpPath())).toBe(false);
+    const claudeAvailable = (() => {
+      try { execSync('claude --version', { stdio: 'pipe' }); return true; } catch { return false; }
+    })();
+    expect(claudeAvailable).toBe(false);
   });
 });

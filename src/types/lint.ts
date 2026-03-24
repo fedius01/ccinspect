@@ -43,6 +43,8 @@ export interface LintIssue {
   docUrl?: string;
   fileRelativePath?: string;
   fileType?: string;
+  scope?: string;
+  fixCascadeCount?: number;
 }
 
 export interface LintRule {

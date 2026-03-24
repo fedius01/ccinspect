@@ -16,7 +16,7 @@ import { parseSettingsJson } from '../parsers/settings-json.js';
 import { parseMcpJson } from '../parsers/mcp-json.js';
 import { buildSingleFileInventory } from '../utils/single-file-inventory.js';
 import { getRuleMetadata } from '../rules/rule-metadata.js';
-import { classifyConfigFile } from '../utils/file-classifier.js';
+import { classifyConfigFile, inferScope } from '../utils/file-classifier.js';
 import { analyzeTranscriptsWithResults } from '../core/transcript-analyzer.js';
 import {
   produceUtilizationReport,
@@ -33,6 +33,7 @@ import {
 import { hashFiles } from '../utils/content-hash.js';
 import type { ConfigVersion } from '../types/history.js';
 import type { ConfigInventory, LintIssue } from '../types/index.js';
+import type { ConfigUtilization, ConfigDiscrepancy } from '../types/transcript.js';
 
 /**
  * Read package version from package.json at runtime.
@@ -103,6 +104,7 @@ function enrichLintIssues(issues: LintIssue[], projectRoot: string): void {
       const fileType = classifyConfigFile(issue.file);
       if (fileType) {
         issue.fileType = fileType;
+        issue.scope = inferScope(issue.file, fileType);
       }
     }
   }
@@ -501,6 +503,277 @@ export async function handleRestore(args: {
   });
 }
 
+// ---- Health Check Intelligence Layer ----
+
+interface ComponentSummary {
+  name: string;
+  type: string;
+  scope: string;
+  file: string;
+  lintIssues: { ruleId: string; severity: string; message: string }[];
+  auditStatus?: {
+    used: boolean;
+    usageCount: number;
+    sessionsAnalyzed: number;
+    details?: string;
+  };
+  discrepancies?: { type: string; message: string }[];
+}
+
+/**
+ * Build a grouped view of findings by component.
+ * Merges lint issues, audit utilization, and discrepancies per component.
+ */
+export function buildComponentSummary(
+  lintIssues: LintIssue[],
+  auditData?: {
+    agents?: ConfigUtilization[];
+    skills?: ConfigUtilization[];
+    mcpServers?: ConfigUtilization[];
+    discrepancies?: ConfigDiscrepancy[];
+  },
+): ComponentSummary[] {
+  const componentMap = new Map<string, ComponentSummary>();
+
+  // Helper to get or create a component entry
+  function getComponent(file: string, name: string, type: string, scope: string): ComponentSummary {
+    const key = file;
+    let entry = componentMap.get(key);
+    if (!entry) {
+      entry = { name, type, scope, file, lintIssues: [] };
+      componentMap.set(key, entry);
+    }
+    return entry;
+  }
+
+  // 1. Group lint issues by fileRelativePath
+  for (const issue of lintIssues) {
+    if (!issue.fileRelativePath) continue;
+    const type = issue.fileType ?? issue.category;
+    const name = issue.fileRelativePath.split('/').pop()?.replace(/\.md$/, '').replace(/\.json$/, '') ?? issue.fileRelativePath;
+    const scope = issue.scope ?? 'project-shared';
+    const comp = getComponent(issue.fileRelativePath, name, type, scope);
+    comp.lintIssues.push({
+      ruleId: issue.ruleId,
+      severity: issue.severity,
+      message: issue.message,
+    });
+  }
+
+  // 2. Merge audit utilization data
+  if (auditData) {
+    const allUtilizations: Array<ConfigUtilization & { componentType: string }> = [
+      ...(auditData.agents ?? []).map((a) => ({ ...a, componentType: 'agent' })),
+      ...(auditData.skills ?? []).map((s) => ({ ...s, componentType: 'skill' })),
+      ...(auditData.mcpServers ?? []).map((m) => ({ ...m, componentType: 'mcp-server' })),
+    ];
+
+    for (const util of allUtilizations) {
+      // Try to find existing entry by matching component name (lint uses relative paths,
+      // audit uses absolute paths — matching by name avoids duplicate entries)
+      let comp: ComponentSummary | undefined;
+      for (const existing of componentMap.values()) {
+        if (existing.name === util.name) {
+          comp = existing;
+          break;
+        }
+      }
+      // Fallback: check if relative/absolute paths refer to same file
+      if (!comp) {
+        for (const existing of componentMap.values()) {
+          if (util.configFile.endsWith(existing.file) || existing.file.endsWith(util.configFile)) {
+            comp = existing;
+            break;
+          }
+        }
+      }
+      // Only create new entry if truly no match
+      if (!comp) {
+        comp = getComponent(util.configFile, util.name, util.componentType, util.scope);
+      }
+      comp.auditStatus = {
+        used: util.used,
+        usageCount: util.usageCount,
+        sessionsAnalyzed: util.sessionsAnalyzed,
+        ...(util.details ? { details: util.details } : {}),
+      };
+    }
+
+    // 3. Merge discrepancies
+    if (auditData.discrepancies) {
+      for (const disc of auditData.discrepancies) {
+        // Find a matching component by name
+        let matched = false;
+        for (const comp of componentMap.values()) {
+          if (comp.name === disc.componentName || comp.file.includes(disc.componentName)) {
+            if (!comp.discrepancies) comp.discrepancies = [];
+            comp.discrepancies.push({ type: disc.type, message: disc.message });
+            matched = true;
+            break;
+          }
+        }
+        // If no match, create a standalone entry (skip ephemeral/truncated names)
+        if (!matched) {
+          const isEphemeral =
+            disc.componentName.length > 40 || disc.componentName.includes('...');
+          if (!isEphemeral) {
+            const comp = getComponent(
+              disc.componentName,
+              disc.componentName,
+              disc.componentType,
+              'project-shared',
+            );
+            if (!comp.discrepancies) comp.discrepancies = [];
+            comp.discrepancies.push({ type: disc.type, message: disc.message });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort: errors first, then warnings, then info
+  const severityOrder: Record<string, number> = { error: 0, warning: 1, info: 2 };
+  const result = [...componentMap.values()];
+  result.sort((a, b) => {
+    const aMax = Math.min(...a.lintIssues.map((i) => severityOrder[i.severity] ?? 3), 3);
+    const bMax = Math.min(...b.lintIssues.map((i) => severityOrder[i.severity] ?? 3), 3);
+    return aMax - bMax;
+  });
+
+  return result;
+}
+
+/**
+ * Compute fix cascade counts on lint issues.
+ * When fixing one issue would resolve related findings, set fixCascadeCount.
+ */
+export function computeFixCascades(issues: LintIssue[]): void {
+  // Pattern: overly-broad-glob → count overlapping-rules referencing same file
+  const overlapByFile = new Map<string, number>();
+  for (const issue of issues) {
+    if (issue.ruleId === 'rules-dir/overlapping-rules' && issue.file) {
+      // Count overlapping-rules per file referenced in evidence
+      if (issue.evidence) {
+        for (const ev of issue.evidence) {
+          const key = ev.file;
+          overlapByFile.set(key, (overlapByFile.get(key) ?? 0) + 1);
+        }
+      }
+      // Also count by the issue's own file
+      overlapByFile.set(issue.file, (overlapByFile.get(issue.file) ?? 0) + 1);
+    }
+  }
+
+  for (const issue of issues) {
+    if (issue.ruleId === 'rules-dir/overly-broad-glob' && issue.file) {
+      const cascadeCount = overlapByFile.get(issue.file) ?? 0;
+      if (cascadeCount > 0) {
+        issue.fixCascadeCount = cascadeCount;
+      }
+    }
+  }
+
+  // Pattern: agents/frontmatter-valid (missing name) → orphan-agent for same file
+  const orphanAgentFiles = new Set<string>();
+  for (const issue of issues) {
+    if (issue.ruleId === 'agents/orphan-agent' && issue.file) {
+      orphanAgentFiles.add(issue.file);
+    }
+  }
+
+  for (const issue of issues) {
+    if (issue.ruleId === 'agents/frontmatter-valid' && issue.file && orphanAgentFiles.has(issue.file)) {
+      issue.fixCascadeCount = (issue.fixCascadeCount ?? 0) + 1;
+    }
+  }
+}
+
+/**
+ * Generate factual analysis hints from co-occurrence patterns.
+ * Returns at most 5 hints. These are observations, not conclusions.
+ */
+export function generateAnalysisHints(
+  componentSummary: ComponentSummary[],
+  lintIssues: LintIssue[],
+): string[] {
+  const hints: string[] = [];
+
+  // Pattern 1: Lint + Audit co-occurrence
+  for (const comp of componentSummary) {
+    if (hints.length >= 5) break;
+    const hasLintProblems = comp.lintIssues.some(
+      (i) => i.severity === 'error' || i.severity === 'warning',
+    );
+    const hasAuditFindings =
+      comp.auditStatus && (!comp.auditStatus.used || (comp.discrepancies && comp.discrepancies.length > 0));
+
+    if (hasLintProblems && hasAuditFindings) {
+      const ruleIds = [...new Set(comp.lintIssues.map((i) => i.ruleId))].join(', ');
+      const auditSummary = !comp.auditStatus!.used
+        ? 'unused'
+        : `${comp.discrepancies!.length} discrepancies`;
+      hints.push(
+        `"${comp.name}" has BOTH lint issues (${ruleIds}) AND audit findings (${auditSummary}). Are these related?`,
+      );
+    }
+  }
+
+  // Pattern 2: Fix cascade
+  for (const issue of lintIssues) {
+    if (hints.length >= 5) break;
+    if (issue.fixCascadeCount && issue.fixCascadeCount > 0) {
+      const file = issue.fileRelativePath ?? issue.file ?? 'unknown';
+      hints.push(
+        `Fixing ${issue.ruleId} on ${file} would also resolve ${issue.fixCascadeCount} related findings.`,
+      );
+    }
+  }
+
+  // Pattern 3: User-scope in project context
+  const userScopeCount = lintIssues.filter((i) => i.scope === 'user').length;
+  if (userScopeCount > 0 && hints.length < 5) {
+    hints.push(
+      `${userScopeCount} findings reference user-scope files (~/.claude/). Are these relevant to this project?`,
+    );
+  }
+
+  // Pattern 4: Contradiction + overlapping scope
+  const contradictionFiles = new Set<string>();
+  const overlapFiles = new Set<string>();
+  for (const issue of lintIssues) {
+    if (issue.ruleId === 'rules-dir/contradiction-keywords' && issue.file) {
+      contradictionFiles.add(issue.file);
+    }
+    if (issue.ruleId === 'rules-dir/overlapping-rules' && issue.file) {
+      overlapFiles.add(issue.file);
+    }
+  }
+  for (const file of contradictionFiles) {
+    if (hints.length >= 5) break;
+    if (overlapFiles.has(file)) {
+      const name = file.split('/').pop() ?? file;
+      hints.push(
+        `"${name}" has both a contradiction warning AND overlapping scope. Review together.`,
+      );
+    }
+  }
+
+  // Pattern 5: Broad allow + missing deny
+  if (hints.length < 5) {
+    const hasBroadAllow = lintIssues.some((i) => i.ruleId === 'settings/dangerous-allow');
+    const hasMissingDeny = lintIssues.some(
+      (i) => i.ruleId === 'settings/deny-env-files' || i.ruleId === 'settings/deny-sensitive-paths',
+    );
+    if (hasBroadAllow && hasMissingDeny) {
+      hints.push(
+        'Broad allow pattern exists alongside missing deny rules. The allow pattern may bypass intended protections.',
+      );
+    }
+  }
+
+  return hints.slice(0, 5);
+}
+
 export async function handleHealthCheck(args: {
   projectDir?: string;
   days?: number;
@@ -622,6 +895,26 @@ export async function handleHealthCheck(args: {
   } catch (e) {
     output.audit = { error: `Audit failed: ${e instanceof Error ? e.message : String(e)}` };
   }
+
+  // 5. Intelligence layer — post-processing across all sections
+  const lintData = output.lint as { issues?: LintIssue[] } | undefined;
+  const auditData = output.audit as {
+    agents?: ConfigUtilization[];
+    skills?: ConfigUtilization[];
+    mcpServers?: ConfigUtilization[];
+    discrepancies?: ConfigDiscrepancy[];
+  } | undefined;
+  const allIssues = lintData?.issues ?? [];
+
+  // Fix cascade counts (mutates issues in place)
+  computeFixCascades(allIssues);
+
+  // Component summary
+  const componentSummary = buildComponentSummary(allIssues, auditData);
+  output.componentSummary = componentSummary;
+
+  // Analysis hints
+  output.analysisHints = generateAnalysisHints(componentSummary, allIssues);
 
   return textResult(output);
 }
